@@ -24,6 +24,11 @@ def build_parser() -> argparse.ArgumentParser:
     predict.add_argument("--musicfm-model", default=None)
     predict.add_argument("--output", default=None)
     predict.add_argument(
+        "--low-memory",
+        action="store_true",
+        help="Use a lower-memory blockwise inference path.",
+    )
+    predict.add_argument(
         "--device",
         default="auto",
         choices=["auto", "cpu", "cuda", "mps"],
@@ -92,6 +97,7 @@ def main() -> int:
         if args.musicfm_model:
             kwargs["musicfm_model_path"] = args.musicfm_model
         kwargs["device"] = args.device
+        kwargs["low_memory"] = args.low_memory
         prediction = predict_file(args.audio_path, **kwargs)
         if args.output:
             Path(args.output).write_text(

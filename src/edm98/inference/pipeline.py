@@ -3,6 +3,7 @@ import json
 import logging
 import math
 import sys
+import gc
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -184,31 +185,23 @@ class InferencePipeline:
         device: str | None = None,
         dataset_label: str = "EDMFormer",
         apply_rule_postprocessing: bool = True,
+        low_memory: bool = False,
     ):
         self.device = _resolve_device(device)
         LOGGER.info("Using device: %s", self.device)
         self.config = load_config(config_path)
         self.dataset_label = dataset_label
         self.apply_rule_postprocessing = apply_rule_postprocessing
+        self.low_memory = low_memory
         LOGGER.info("Loaded config from %s", config_path)
+        self.musicfm_stat_path = str(musicfm_stat_path)
+        self.musicfm_model_path = str(musicfm_model_path)
+        self.muq_model = None
+        self.musicfm_model = None
 
-        MuQ = _load_muq()
-        MusicFM25Hz = _load_musicfm()
-        LOGGER.info("Initializing MuQ model")
-
-        self.muq_model = MuQ.from_pretrained("OpenMuQ/MuQ-large-msd-iter")
-        self.muq_model = self.muq_model.to(self.device).eval()
-        LOGGER.info("Initialized MuQ model")
-
-        LOGGER.info("Initializing MusicFM model from %s and %s", musicfm_stat_path, musicfm_model_path)
-        with _torch_load_weights_only_false():
-            self.musicfm_model = MusicFM25Hz(
-                is_flash=False,
-                stat_path=str(musicfm_stat_path),
-                model_path=str(musicfm_model_path),
-            )
-        self.musicfm_model = self.musicfm_model.to(self.device).eval()
-        LOGGER.info("Initialized MusicFM model")
+        if not self.low_memory:
+            self.muq_model = self._create_muq_model()
+            self.musicfm_model = self._create_musicfm_model()
 
         self.model = Model(self.config)
         LOGGER.info("Loading EDMFormer checkpoint from %s", checkpoint_path)
@@ -232,6 +225,107 @@ class InferencePipeline:
             dtype=torch.long,
             device=self.device,
         )
+
+    def _create_muq_model(self):
+        MuQ = _load_muq()
+        LOGGER.info("Initializing MuQ model")
+        model = MuQ.from_pretrained("OpenMuQ/MuQ-large-msd-iter")
+        model = model.to(self.device).eval()
+        LOGGER.info("Initialized MuQ model")
+        return model
+
+    def _create_musicfm_model(self):
+        MusicFM25Hz = _load_musicfm()
+        LOGGER.info(
+            "Initializing MusicFM model from %s and %s",
+            self.musicfm_stat_path,
+            self.musicfm_model_path,
+        )
+        with _torch_load_weights_only_false():
+            model = MusicFM25Hz(
+                is_flash=False,
+                stat_path=self.musicfm_stat_path,
+                model_path=self.musicfm_model_path,
+            )
+        model = model.to(self.device).eval()
+        LOGGER.info("Initialized MusicFM model")
+        return model
+
+    def _release_feature_models(self):
+        self.muq_model = None
+        self.musicfm_model = None
+        gc.collect()
+
+    def _extract_muq_block(self, audio: torch.Tensor, start_sec: int):
+        model = self.muq_model or self._create_muq_model()
+        with torch.no_grad():
+            start_idx = start_sec * INPUT_SAMPLING_RATE
+            end_idx = min((start_sec + TIME_DUR) * INPUT_SAMPLING_RATE, audio.shape[-1])
+            audio_seg = audio[start_idx:end_idx]
+            muq_output = model(audio_seg.unsqueeze(0), output_hidden_states=True)
+            muq_embd_420s = muq_output["hidden_states"][10].detach().cpu()
+            del muq_output
+
+            wrapped = []
+            for idx_30s in range(start_sec, start_sec + TIME_DUR, 30):
+                start_idx_30s = idx_30s * INPUT_SAMPLING_RATE
+                end_idx_30s = min(
+                    (idx_30s + 30) * INPUT_SAMPLING_RATE,
+                    audio.shape[-1],
+                    (start_sec + TIME_DUR) * INPUT_SAMPLING_RATE,
+                )
+                if start_idx_30s >= audio.shape[-1]:
+                    break
+                if end_idx_30s - start_idx_30s <= 1024:
+                    continue
+                hidden = model(
+                    audio[start_idx_30s:end_idx_30s].unsqueeze(0),
+                    output_hidden_states=True,
+                )["hidden_states"][10]
+                wrapped.append(hidden.detach().cpu())
+                del hidden
+
+        wrapped_30s = torch.concatenate(wrapped, dim=1)
+        if self.low_memory:
+            del model
+            self.muq_model = None
+            gc.collect()
+        return wrapped_30s, muq_embd_420s
+
+    def _extract_musicfm_block(self, audio: torch.Tensor, start_sec: int):
+        model = self.musicfm_model or self._create_musicfm_model()
+        with torch.no_grad():
+            start_idx = start_sec * INPUT_SAMPLING_RATE
+            end_idx = min((start_sec + TIME_DUR) * INPUT_SAMPLING_RATE, audio.shape[-1])
+            audio_seg = audio[start_idx:end_idx]
+            _, hidden_states = model.get_predictions(audio_seg.unsqueeze(0))
+            musicfm_embd_420s = hidden_states[10].detach().cpu()
+            del hidden_states
+
+            wrapped = []
+            for idx_30s in range(start_sec, start_sec + TIME_DUR, 30):
+                start_idx_30s = idx_30s * INPUT_SAMPLING_RATE
+                end_idx_30s = min(
+                    (idx_30s + 30) * INPUT_SAMPLING_RATE,
+                    audio.shape[-1],
+                    (start_sec + TIME_DUR) * INPUT_SAMPLING_RATE,
+                )
+                if start_idx_30s >= audio.shape[-1]:
+                    break
+                if end_idx_30s - start_idx_30s <= 1024:
+                    continue
+                hidden = model.get_predictions(
+                    audio[start_idx_30s:end_idx_30s].unsqueeze(0)
+                )[1][10]
+                wrapped.append(hidden.detach().cpu())
+                del hidden
+
+        wrapped_30s = torch.concatenate(wrapped, dim=1)
+        if self.low_memory:
+            del model
+            self.musicfm_model = None
+            gc.collect()
+        return wrapped_30s, musicfm_embd_420s
 
     def predict_file(self, audio_path: str | Path) -> list[dict[str, float | str]]:
         LOGGER.info("Running prediction for %s", audio_path)
@@ -264,50 +358,9 @@ class InferencePipeline:
                 if end_idx - start_idx <= 1024:
                     break
 
-                audio_seg = audio[start_idx:end_idx]
                 LOGGER.debug("Processing segment starting at %.2fs", i)
-
-                muq_output = self.muq_model(audio_seg.unsqueeze(0), output_hidden_states=True)
-                muq_embd_420s = muq_output["hidden_states"][10]
-                del muq_output
-
-                _, musicfm_hidden_states = self.musicfm_model.get_predictions(
-                    audio_seg.unsqueeze(0)
-                )
-                musicfm_embd_420s = musicfm_hidden_states[10]
-                del musicfm_hidden_states
-
-                wrapped_muq_embd_30s = []
-                wrapped_musicfm_embd_30s = []
-
-                for idx_30s in range(i, i + TIME_DUR, 30):
-                    start_idx_30s = idx_30s * INPUT_SAMPLING_RATE
-                    end_idx_30s = min(
-                        (idx_30s + 30) * INPUT_SAMPLING_RATE,
-                        audio.shape[-1],
-                        (i + TIME_DUR) * INPUT_SAMPLING_RATE,
-                    )
-                    if start_idx_30s >= audio.shape[-1]:
-                        break
-                    if end_idx_30s - start_idx_30s <= 1024:
-                        continue
-
-                    wrapped_muq_embd_30s.append(
-                        self.muq_model(
-                            audio[start_idx_30s:end_idx_30s].unsqueeze(0),
-                            output_hidden_states=True,
-                        )["hidden_states"][10]
-                    )
-                    wrapped_musicfm_embd_30s.append(
-                        self.musicfm_model.get_predictions(
-                            audio[start_idx_30s:end_idx_30s].unsqueeze(0)
-                        )[1][10]
-                    )
-
-                wrapped_muq_embd_30s = torch.concatenate(wrapped_muq_embd_30s, dim=1)
-                wrapped_musicfm_embd_30s = torch.concatenate(
-                    wrapped_musicfm_embd_30s, dim=1
-                )
+                wrapped_muq_embd_30s, muq_embd_420s = self._extract_muq_block(audio, i)
+                wrapped_musicfm_embd_30s, musicfm_embd_420s = self._extract_musicfm_block(audio, i)
 
                 all_embds = [
                     wrapped_musicfm_embd_30s,
@@ -324,9 +377,11 @@ class InferencePipeline:
                         f"Embedding shapes differ too much: {max_embd_len} vs {min_embd_len}"
                     )
                 for idx in range(len(all_embds)):
-                    all_embds[idx] = all_embds[idx][:, :min_embd_len, :]
+                    all_embds[idx] = all_embds[idx][:, :min_embd_len, :].to(self.device)
 
                 embd = torch.concatenate(all_embds, axis=-1)
+                del wrapped_muq_embd_30s, muq_embd_420s, wrapped_musicfm_embd_30s, musicfm_embd_420s, all_embds
+                gc.collect()
 
                 _msa_info, chunk_logits = self.model.infer(
                     input_embeddings=embd,
@@ -350,6 +405,8 @@ class InferencePipeline:
                 logits_num["function_logits"][start_frame:end_frame, :] += 1
                 logits_num["boundary_logits"][start_frame:end_frame] += 1
                 lens += end_frame - start_frame
+                del embd, chunk_logits
+                gc.collect()
                 i += TIME_DUR
 
         logits["function_logits"] /= logits_num["function_logits"]
