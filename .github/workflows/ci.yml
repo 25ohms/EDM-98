@@ -47,7 +47,8 @@ jobs:
       - name: Install Inference Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,inference]"
+          pip install -e ".[dev]"
+          ./scripts/install_inference_deps.sh
 
       - name: Run Tests Including Optional Inference Smoke
-        run: pytest -q
+        run: PYTHONPATH=$PWD/src:$PWD/third_party pytest -q

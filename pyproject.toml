@@ -28,8 +28,7 @@ inference = [
   "safetensors>=0.5.3",
   "x-transformers>=2.4.14",
   "scipy>=1.15.0",
-  "muq @ git+https://github.com/tencent-ailab/MuQ.git",
-  "musicfm @ git+https://github.com/minzwon/musicfm.git"
+  "muq @ git+https://github.com/tencent-ailab/MuQ.git"
 ]
 ui = [
   "gradio>=5.0"

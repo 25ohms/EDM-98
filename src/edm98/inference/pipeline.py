@@ -1,6 +1,7 @@
 import importlib
 import json
 import math
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -82,11 +83,18 @@ def _load_muq():
 def _load_musicfm():
     try:
         module = importlib.import_module("musicfm.model.musicfm_25hz")
-    except ImportError as exc:
-        raise RuntimeError(
-            "Inference requires the MusicFM Python package. "
-            "Install it separately, then retry."
-        ) from exc
+    except ImportError:
+        third_party_root = DEFAULT_DATA_DIR.parent / "third_party"
+        if third_party_root.exists() and str(third_party_root) not in sys.path:
+            sys.path.insert(0, str(third_party_root))
+        try:
+            module = importlib.import_module("musicfm.model.musicfm_25hz")
+        except ImportError as exc:
+            raise RuntimeError(
+                "Inference requires the MusicFM source tree. "
+                "Clone https://github.com/minzwon/musicfm into third_party/musicfm "
+                "or add its parent directory to PYTHONPATH, then retry."
+            ) from exc
     return module.MusicFM25Hz
 
 

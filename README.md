@@ -60,19 +60,46 @@ The current optional inference path also expects MusicFM support plus MusicFM we
 - `data/checkpoints/msd_stats.json`
 - `data/checkpoints/pretrained_msd.pt`
 
-The optional inference environment also requires the upstream MuQ and MusicFM codebases. In this repository, inference extras are configured to install those upstream packages directly. This is the practical equivalent of installing the upstream third-party submodules required by EDMFormer.
+The optional inference environment also requires the upstream MuQ and MusicFM codebases.
+
+- MuQ is installed as a Python dependency.
+- MusicFM is source-only upstream, so it should be checked out locally under `third_party/musicfm` or otherwise made available on `PYTHONPATH`.
+
+Large binary assets in `data/checkpoints/` should be tracked with Git LFS.
 
 Typical setup:
 
 ```bash
 pip install -e ".[inference]"
+git clone https://github.com/minzwon/musicfm.git third_party/musicfm
+export PYTHONPATH="$PWD/src:$PWD/third_party:$PYTHONPATH"
 ```
 
 or
 
 ```bash
 ./scripts/install_inference_deps.sh
+export PYTHONPATH="$PWD/src:$PWD/third_party:$PYTHONPATH"
 ```
+
+### Local validation
+
+Dataset-only validation:
+
+```bash
+pytest -q
+PYTHONPATH=src python -m edm98.cli validate-dataset data/dataset.jsonl --splits-dir data/splits
+```
+
+Optional inference setup validation:
+
+```bash
+./scripts/install_inference_deps.sh
+export PYTHONPATH="$PWD/src:$PWD/third_party:$PYTHONPATH"
+pytest -q
+```
+
+The optional inference test currently checks config-loading and dependency wiring. Real audio inference should be tested only after confirming that MuQ, MusicFM, `model.pt`, `pretrained_msd.pt`, and `msd_stats.json` are all available locally.
 
 The checkpoint does not need to live in git. It can be hosted externally and documented in `data/checkpoints/README.md`.
 
