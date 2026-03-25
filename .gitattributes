@@ -1,1 +1,2 @@
 data/checkpoints/model.pt filter=lfs diff=lfs merge=lfs -text
+data/checkpoints/pretrained_msd.pt filter=lfs diff=lfs merge=lfs -text
