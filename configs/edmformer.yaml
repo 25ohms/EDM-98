@@ -1,0 +1,38 @@
+input_dim_raw: 4096
+input_dim: 2048
+
+down_sample_conv_kernel_size: 3
+down_sample_conv_stride: 3
+down_sample_conv_dropout: 0.1
+down_sample_conv_padding: 0
+
+transformer_encoder_input_dim: 1024
+transformer_input_dim: 512
+num_transformer_layers: 4
+transformer_nhead: 8
+transformer_dropout: 0.1
+
+boundary_head_hidden_dims: [128, 64, 8]
+function_head_hidden_dims: []
+
+num_classes: 128
+num_dataset_classes: 64
+
+output_logits_frame_rates: 8.333
+downsample_rates: 3
+frame_rates: 8.333
+slice_dur: 420
+local_maxima_filter_size: 3
+
+label_focal_loss_alpha: 0.25
+label_focal_loss_gamma: 2.0
+boundary_tv_loss_beta: 0.6
+boundary_tv_loss_lambda: 0.4
+boundary_tv_loss_boundary_threshold: 0.01
+boundary_tv_loss_reduction_weight: 0.1
+boundary_tvloss_weight: 0.05
+
+loss_weight_section: 0.2
+loss_weight_function: 0.8
+learn_label: true
+learn_segment: true

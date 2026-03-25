@@ -19,6 +19,15 @@ EDM-98 was created from a curated 98-song selection, Rekordbox cue point labelin
 
 The dataset artifact originally existed as a JSON file and was later converted to JSONL to satisfy the label-file format expected by the SongFormer architecture. The canonical source of truth for EDM-98 labels is therefore `dataset.jsonl`.
 
+## Licensing
+
+This repository uses separate licenses by component:
+
+- repository code and model-related materials: CC BY 4.0
+- dataset metadata and split files under `data/`: MIT
+
+Attribution should be preserved for upstream SongFormer-derived materials and for EDM-CUE-derived dataset metadata.
+
 ## Planned Package Surface
 
 The repository is being designed around two usage modes.
@@ -43,7 +52,27 @@ Recommended artifact locations:
 - `data/dataset.jsonl`
 - `data/splits/train.txt`
 - `data/splits/test.txt`
-- `data/checkpoints/EDMFormer.safetensors` as the default local convention
+- `data/checkpoints/model.pt` as the default checkpoint convention
+- `configs/edmformer.yaml` as the public inference config
+
+The current optional inference path also expects MusicFM support plus MusicFM weight files such as:
+
+- `data/checkpoints/msd_stats.json`
+- `data/checkpoints/pretrained_msd.pt`
+
+The optional inference environment also requires the upstream MuQ and MusicFM codebases. In this repository, inference extras are configured to install those upstream packages directly. This is the practical equivalent of installing the upstream third-party submodules required by EDMFormer.
+
+Typical setup:
+
+```bash
+pip install -e ".[inference]"
+```
+
+or
+
+```bash
+./scripts/install_inference_deps.sh
+```
 
 The checkpoint does not need to live in git. It can be hosted externally and documented in `data/checkpoints/README.md`.
 
@@ -58,7 +87,6 @@ edm98 demo
 
 ## Next Work
 
-- add `dataset.jsonl`, `train.txt`, and `test.txt`
 - define the canonical public schema
 - add the packaged inference core
 - add the CLI and Gradio app

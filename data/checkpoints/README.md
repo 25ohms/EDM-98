@@ -4,13 +4,15 @@ This directory documents the local checkpoint convention for optional EDMFormer 
 
 Recommended local filename:
 
-- `EDMFormer.safetensors`
+- `model.pt`
+- `pretrained_msd.pt`
+- `msd_stats.json`
 
 Recommended behavior for the package:
 
 1. use `--checkpoint` if provided
 2. otherwise use `EDM98_CHECKPOINT` if set
-3. otherwise look for `data/checkpoints/EDMFormer.safetensors`
+3. otherwise look for `data/checkpoints/model.pt`
 
 Do not commit large checkpoint binaries into git history unless you explicitly decide to distribute them that way.
 
@@ -26,3 +28,16 @@ When publishing the checkpoint, document:
 - version
 - checksum
 - expected config compatibility
+
+Additional inference assets expected by the current optional inference path:
+
+- `msd_stats.json`
+- `pretrained_msd.pt`
+
+These correspond to MusicFM weights and should be documented alongside any setup instructions.
+
+Large binary checkpoint assets in this directory should be tracked with Git LFS.
+At present, this applies to:
+
+- `model.pt`
+- `pretrained_msd.pt`
