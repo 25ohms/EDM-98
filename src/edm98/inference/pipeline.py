@@ -60,6 +60,25 @@ def load_checkpoint(checkpoint_path: str | Path, device=None):
     raise ValueError("Unsupported checkpoint format. Use .pt or .safetensors")
 
 
+def extract_model_state_dict(checkpoint: dict) -> dict:
+    if checkpoint.get("model") is not None:
+        return checkpoint["model"]
+
+    model_ema = checkpoint.get("model_ema")
+    if model_ema is None:
+        raise RuntimeError("Checkpoint missing 'model' or 'model_ema' state.")
+
+    cleaned = {}
+    for key, value in model_ema.items():
+        if key in {"initted", "step"}:
+            continue
+        if key.startswith("ema_model."):
+            cleaned[key.removeprefix("ema_model.")] = value
+        else:
+            cleaned[key] = value
+    return cleaned
+
+
 def _load_audio_backend():
     try:
         import librosa
@@ -129,12 +148,8 @@ class InferencePipeline:
 
         self.model = Model(self.config)
         ckpt = load_checkpoint(checkpoint_path=checkpoint_path, device=self.device)
-        if ckpt.get("model_ema") is not None:
-            self.model.load_state_dict(ckpt["model_ema"], strict=True)
-        elif ckpt.get("model") is not None:
-            self.model.load_state_dict(ckpt["model"], strict=True)
-        else:
-            raise RuntimeError("Checkpoint missing 'model' or 'model_ema' state.")
+        state_dict = extract_model_state_dict(ckpt)
+        self.model.load_state_dict(state_dict, strict=True)
         self.model.to(self.device).eval()
 
         mask = build_label_mask(

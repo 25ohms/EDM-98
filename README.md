@@ -63,7 +63,7 @@ The current optional inference path also expects MusicFM support plus MusicFM we
 The optional inference environment also requires the upstream MuQ and MusicFM codebases.
 
 - MuQ is installed as a Python dependency.
-- MusicFM is source-only upstream, so it should be checked out locally under `third_party/musicfm` or otherwise made available on `PYTHONPATH`.
+- MusicFM is source-only upstream, so the supported setup is to clone it locally under `third_party/musicfm` using the provided install script.
 
 Large binary assets in `data/checkpoints/` should be tracked with Git LFS.
 
@@ -81,6 +81,15 @@ or
 ./scripts/install_inference_deps.sh
 export PYTHONPATH="$PWD/src:$PWD/third_party:$PYTHONPATH"
 ```
+
+Recommended first-time setup:
+
+```bash
+./scripts/install_inference_deps.sh
+export PYTHONPATH="$PWD/src:$PWD/third_party:$PYTHONPATH"
+```
+
+The repository does not track `third_party/musicfm`; the install script provisions it locally for inference use.
 
 ### Local validation
 
