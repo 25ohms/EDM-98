@@ -1,4 +1,5 @@
 import argparse
+import logging
 from pathlib import Path
 
 from .loaders import load_all_splits, load_dataset_records
@@ -7,6 +8,12 @@ from .schema import ValidationError, validate_splits_against_dataset
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="edm98")
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Logging verbosity.",
+    )
     subparsers = parser.add_subparsers(dest="command")
 
     predict = subparsers.add_parser("predict", help="Run inference on one audio file.")
@@ -16,6 +23,12 @@ def build_parser() -> argparse.ArgumentParser:
     predict.add_argument("--musicfm-stat", default=None)
     predict.add_argument("--musicfm-model", default=None)
     predict.add_argument("--output", default=None)
+    predict.add_argument(
+        "--device",
+        default="auto",
+        choices=["auto", "cpu", "cuda", "mps"],
+        help="Device selection for inference.",
+    )
 
     predict_batch = subparsers.add_parser(
         "predict-batch", help="Run inference on a directory or manifest."
@@ -40,6 +53,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    logging.basicConfig(
+        level=getattr(logging, args.log_level),
+        format="%(levelname)s %(name)s: %(message)s",
+    )
 
     if not args.command:
         parser.print_help()
@@ -74,6 +91,7 @@ def main() -> int:
             kwargs["musicfm_stat_path"] = args.musicfm_stat
         if args.musicfm_model:
             kwargs["musicfm_model_path"] = args.musicfm_model
+        kwargs["device"] = args.device
         prediction = predict_file(args.audio_path, **kwargs)
         if args.output:
             Path(args.output).write_text(

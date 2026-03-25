@@ -1,5 +1,6 @@
 import importlib
 import json
+import logging
 import math
 import sys
 from contextlib import contextmanager
@@ -24,6 +25,8 @@ DEFAULT_MUSICFM_MODEL_PATH = DEFAULT_DATA_DIR / "checkpoints" / "pretrained_msd.
 INPUT_SAMPLING_RATE = 24000
 TIME_DUR = 420
 AFTER_DOWNSAMPLING_FRAME_RATES = 8.333
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _dict_to_namespace(data):
@@ -51,6 +54,18 @@ def load_checkpoint(checkpoint_path: str | Path, device=None):
     checkpoint_path = str(checkpoint_path)
     if device is None:
         device = "cpu"
+
+    path = Path(checkpoint_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+    if path.is_file():
+        with path.open("rb") as handle:
+            prefix = handle.read(64)
+        if prefix.startswith(b"version https://git-lfs.github.com/spec/v1"):
+            raise RuntimeError(
+                f"{checkpoint_path} is a Git LFS pointer, not the real binary. "
+                "Fetch LFS assets before running inference."
+            )
 
     if checkpoint_path.endswith(".pt"):
         return torch.load(checkpoint_path, map_location=device, weights_only=False)
@@ -88,6 +103,32 @@ def _load_audio_backend():
             "Inference requires librosa. Install optional inference dependencies first."
         ) from exc
     return librosa
+
+
+def _resolve_device(requested: str | None) -> torch.device:
+    requested = (requested or "auto").lower()
+    if requested in {"cpu", "mps", "cuda"}:
+        if requested == "cuda":
+            try:
+                _ = torch.zeros(1, device="cuda")
+                return torch.device("cuda")
+            except Exception as exc:
+                raise RuntimeError(f"CUDA requested but unavailable: {exc}") from exc
+        if requested == "mps":
+            if not torch.backends.mps.is_available():
+                raise RuntimeError("MPS requested but unavailable.")
+            return torch.device("mps")
+        return torch.device("cpu")
+
+    try:
+        _ = torch.zeros(1, device="cuda")
+        return torch.device("cuda")
+    except Exception as exc:
+        LOGGER.warning("CUDA unavailable, falling back from auto device selection: %s", exc)
+
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
 
 
 def _load_muq():
@@ -144,17 +185,22 @@ class InferencePipeline:
         dataset_label: str = "EDMFormer",
         apply_rule_postprocessing: bool = True,
     ):
-        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        self.device = _resolve_device(device)
+        LOGGER.info("Using device: %s", self.device)
         self.config = load_config(config_path)
         self.dataset_label = dataset_label
         self.apply_rule_postprocessing = apply_rule_postprocessing
+        LOGGER.info("Loaded config from %s", config_path)
 
         MuQ = _load_muq()
         MusicFM25Hz = _load_musicfm()
+        LOGGER.info("Initializing MuQ model")
 
         self.muq_model = MuQ.from_pretrained("OpenMuQ/MuQ-large-msd-iter")
         self.muq_model = self.muq_model.to(self.device).eval()
+        LOGGER.info("Initialized MuQ model")
 
+        LOGGER.info("Initializing MusicFM model from %s and %s", musicfm_stat_path, musicfm_model_path)
         with _torch_load_weights_only_false():
             self.musicfm_model = MusicFM25Hz(
                 is_flash=False,
@@ -162,12 +208,15 @@ class InferencePipeline:
                 model_path=str(musicfm_model_path),
             )
         self.musicfm_model = self.musicfm_model.to(self.device).eval()
+        LOGGER.info("Initialized MusicFM model")
 
         self.model = Model(self.config)
+        LOGGER.info("Loading EDMFormer checkpoint from %s", checkpoint_path)
         ckpt = load_checkpoint(checkpoint_path=checkpoint_path, device=self.device)
         state_dict = extract_model_state_dict(ckpt)
         self.model.load_state_dict(state_dict, strict=True)
         self.model.to(self.device).eval()
+        LOGGER.info("Loaded EDMFormer checkpoint")
 
         mask = build_label_mask(
             num_classes=self.config.num_classes,
@@ -185,9 +234,11 @@ class InferencePipeline:
         )
 
     def predict_file(self, audio_path: str | Path) -> list[dict[str, float | str]]:
+        LOGGER.info("Running prediction for %s", audio_path)
         librosa = _load_audio_backend()
         wav, _sr = librosa.load(audio_path, sr=INPUT_SAMPLING_RATE)
         audio = torch.tensor(wav).to(self.device)
+        LOGGER.info("Decoded audio with %d samples", audio.shape[0])
 
         total_len = ((audio.shape[0] // INPUT_SAMPLING_RATE) // TIME_DUR * TIME_DUR) + TIME_DUR
         total_frames = math.ceil(total_len * AFTER_DOWNSAMPLING_FRAME_RATES)
@@ -214,6 +265,7 @@ class InferencePipeline:
                     break
 
                 audio_seg = audio[start_idx:end_idx]
+                LOGGER.debug("Processing segment starting at %.2fs", i)
 
                 muq_output = self.muq_model(audio_seg.unsqueeze(0), output_hidden_states=True)
                 muq_embd_420s = muq_output["hidden_states"][10]
@@ -311,6 +363,7 @@ class InferencePipeline:
         msa_infer_output = postprocess_functional_structure(logits, self.config)
         if self.apply_rule_postprocessing:
             msa_infer_output = rule_post_processing(msa_infer_output)
+        LOGGER.info("Prediction completed with %d segments", len(msa_infer_output) - 1)
 
         output = []
         for idx in range(len(msa_infer_output) - 1):
