@@ -2,6 +2,7 @@ import importlib
 import json
 import math
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -117,6 +118,21 @@ def _load_musicfm():
     return module.MusicFM25Hz
 
 
+@contextmanager
+def _torch_load_weights_only_false():
+    original_torch_load = torch.load
+
+    def patched_torch_load(*args, **kwargs):
+        kwargs.setdefault("weights_only", False)
+        return original_torch_load(*args, **kwargs)
+
+    torch.load = patched_torch_load
+    try:
+        yield
+    finally:
+        torch.load = original_torch_load
+
+
 class InferencePipeline:
     def __init__(
         self,
@@ -139,11 +155,12 @@ class InferencePipeline:
         self.muq_model = MuQ.from_pretrained("OpenMuQ/MuQ-large-msd-iter")
         self.muq_model = self.muq_model.to(self.device).eval()
 
-        self.musicfm_model = MusicFM25Hz(
-            is_flash=False,
-            stat_path=str(musicfm_stat_path),
-            model_path=str(musicfm_model_path),
-        )
+        with _torch_load_weights_only_false():
+            self.musicfm_model = MusicFM25Hz(
+                is_flash=False,
+                stat_path=str(musicfm_stat_path),
+                model_path=str(musicfm_model_path),
+            )
         self.musicfm_model = self.musicfm_model.to(self.device).eval()
 
         self.model = Model(self.config)
