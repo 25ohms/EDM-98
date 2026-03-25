@@ -13,18 +13,6 @@ This repository is intended to contain:
 - an optional Gradio demo for interactive use
 - clear contributor-facing documentation
 
-It is intentionally not intended to contain the full cloud training and orchestration setup used during model development.
-
-## Status
-
-This repository has been initialized as the productionization target for the existing work spread across:
-
-- `EDM-CUE_testing`
-- `EDMFormer`
-- `EDMFormer-project`
-
-The implementation plan lives in [AGENTS.md](/Users/sahal/Desktop/ohms/code/WATAI/EDM-98/AGENTS.md).
-
 ## Provenance
 
 EDM-98 was created from a curated 98-song selection, Rekordbox cue point labeling, and an extracted dataset artifact.
