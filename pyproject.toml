@@ -56,10 +56,11 @@ edm98 = "edm98.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-license-files = ["LICENSE", "data/LICENSE"]
+license-files = ["LICENSE", "src/edm98/resources/LICENSE"]
 
 [tool.setuptools.package-data]
 edm98 = [
+  "resources/LICENSE",
   "resources/dataset.jsonl",
   "resources/splits/*.txt"
 ]

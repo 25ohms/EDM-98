@@ -7,9 +7,6 @@ def test_validate_dataset_cli(capsys, monkeypatch) -> None:
         [
             "edm98",
             "validate-dataset",
-            "data/dataset.jsonl",
-            "--splits-dir",
-            "data/splits",
         ],
     )
     code = main()
