@@ -14,6 +14,13 @@ LABEL_COLORS = {
 }
 
 
+def _format_clock(seconds: float) -> str:
+    whole_seconds = int(seconds)
+    minutes = whole_seconds // 60
+    remainder = whole_seconds % 60
+    return f"{minutes}:{remainder:02d}"
+
+
 def _format_segments(prediction: list[dict[str, float | str]]) -> list[list[str | float]]:
     rows = []
     for segment in prediction:
@@ -21,10 +28,10 @@ def _format_segments(prediction: list[dict[str, float | str]]) -> list[list[str 
         end = float(segment["end"])
         rows.append(
             [
-                str(segment["label"]),
-                round(start, 3),
-                round(end, 3),
-                round(end - start, 3),
+                str(segment["label"]).replace("_", " ").title(),
+                f"{start:.3f}s ({_format_clock(start)})",
+                f"{end:.3f}s ({_format_clock(end)})",
+                f"{(end - start):.3f}s ({_format_clock(end - start)})",
             ]
         )
     return rows
@@ -40,7 +47,6 @@ def _build_audio_data_url(audio_path: Path) -> str:
 def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | str]]) -> str:
     audio_data_url = _build_audio_data_url(audio_path)
     regions = []
-    legend_items = []
     for segment in prediction:
         label = str(segment["label"])
         color = LABEL_COLORS.get(label, "#6C757D")
@@ -48,17 +54,15 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
             {
                 "start": float(segment["start"]),
                 "end": float(segment["end"]),
-                "content": label,
+                "content": label.replace("_", " ").title(),
                 "color": f"{color}66",
+                "drag": False,
+                "resize": False,
             }
-        )
-        legend_items.append(
-            f"<span class='legend-chip'><span class='legend-swatch' style='background:{color}'></span>{label}</span>"
         )
 
     html_id = f"waveform-{abs(hash((audio_path.name, tuple((r['start'], r['end'], r['content']) for r in regions))))}"
     regions_json = json.dumps(regions)
-    legend_html = "".join(dict.fromkeys(legend_items))
 
     return f"""
 <div class="edm98-waveform-shell">
@@ -67,14 +71,16 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     <div class="edm98-time"><span id="{html_id}-current">0:00</span> / <span id="{html_id}-total">0:00</span></div>
   </div>
   <div id="{html_id}" class="edm98-waveform"></div>
-  <div class="edm98-legend">{legend_html}</div>
 </div>
 <style>
   .edm98-waveform-shell {{
+    width: 100%;
     border: 1px solid #d7dde5;
-    border-radius: 16px;
-    padding: 16px;
-    background: linear-gradient(180deg, #fcfdff 0%, #f4f7fb 100%);
+    border-radius: 20px;
+    padding: 18px 18px 10px;
+    background: linear-gradient(180deg, #fcfdff 0%, #eef4fb 100%);
+    box-sizing: border-box;
+    overflow: hidden;
   }}
   .edm98-toolbar {{
     display: flex;
@@ -93,34 +99,28 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     cursor: pointer;
   }}
   .edm98-waveform {{
-    min-height: 180px;
+    width: 100%;
+    min-height: 220px;
   }}
   .edm98-time {{
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.95rem;
     color: #334155;
   }}
-  .edm98-legend {{
-    margin-top: 12px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+  .edm98-waveform ::-webkit-scrollbar {{
+    display: none;
   }}
-  .legend-chip {{
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.85);
-    border: 1px solid #d7dde5;
-    font-size: 0.9rem;
+  .edm98-waveform region {{
+    border-radius: 12px;
+    overflow: hidden;
   }}
-  .legend-swatch {{
-    width: 10px;
-    height: 10px;
-    border-radius: 999px;
-    display: inline-block;
+  .edm98-waveform region div {{
+    font-size: 0.8rem !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 6px 8px !important;
   }}
 </style>
 <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
@@ -148,9 +148,15 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     progressColor: "#0f172a",
     cursorColor: "#ef4444",
     cursorWidth: 2,
-    height: 180,
+    height: 220,
     barWidth: 2,
     barGap: 1,
+    fillParent: true,
+    normalize: true,
+    minPxPerSec: 120,
+    autoScroll: true,
+    autoCenter: true,
+    hideScrollbar: true,
     url: "{audio_data_url}",
     plugins: [regionsPlugin],
   }});
@@ -222,7 +228,6 @@ def build_demo(
         prediction = pipeline.predict_file(audio_path)
         return (
             _format_segments(prediction),
-            json.dumps(prediction, indent=2),
             _build_waveform_html(audio_path, prediction),
         )
 
@@ -233,7 +238,14 @@ def build_demo(
         "preloaded when the app starts and remains live until the process exits."
     )
 
-    with gr.Blocks(title="EDM-98 Demo") as demo:
+    with gr.Blocks(
+        title="EDM-98 Demo",
+        css="""
+        .gradio-container {max-width: min(1600px, 98vw) !important;}
+        .edm98-results {width: 100%;}
+        .edm98-table .wrap.svelte-1ipelgc {font-size: 0.95rem;}
+        """,
+    ) as demo:
         gr.Markdown("# EDM-98 Inference Demo")
         gr.Markdown(description)
         audio_input = gr.Audio(
@@ -242,23 +254,19 @@ def build_demo(
             label="Audio File",
         )
         run_button = gr.Button("Run Inference", variant="primary")
-        waveform_output = gr.HTML()
+        waveform_output = gr.HTML(elem_classes=["edm98-results"])
         segment_table = gr.Dataframe(
-            headers=["Label", "Start (s)", "End (s)", "Duration (s)"],
-            datatype=["str", "number", "number", "number"],
+            headers=["Label", "Start", "End", "Duration"],
+            datatype=["str", "str", "str", "str"],
             interactive=False,
             label="Predicted Segments",
-        )
-        json_output = gr.Code(
-            label="Prediction JSON",
-            language="json",
-            interactive=False,
+            elem_classes=["edm98-table"],
         )
 
         run_button.click(
             fn=run_inference,
             inputs=[audio_input],
-            outputs=[segment_table, json_output, waveform_output],
+            outputs=[segment_table, waveform_output],
         )
 
     return demo

@@ -88,11 +88,10 @@ The Gradio app uses the same inference backend as the CLI and preloads the infer
 The demo currently provides:
 
 - a file upload flow
-- a color-coded waveform timeline
+- a full-width color-coded waveform timeline
 - labeled section regions
 - a moving playback cursor
-- a tabular view of predicted sections
-- raw JSON output for inspection
+- a tabular view of predicted sections with minute-second timestamps
 
 For local or Vertex AI Workbench use:
 
