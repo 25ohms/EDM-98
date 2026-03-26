@@ -4,8 +4,8 @@
 
 ## What Is Included
 
-- the canonical EDM-98 label artifact at `data/dataset.jsonl`
-- canonical split files in `data/splits/`
+- the canonical EDM-98 label artifact packaged with the module
+- canonical split files packaged with the module
 - a lightweight Python package for dataset loading and validation
 - an optional inference pipeline for EDMFormer
 - a CLI for validation, prediction, cache warming, and demo launch
@@ -13,7 +13,9 @@
 
 ## Dataset
 
-EDM-98 was created from a curated 98-song set with Rekordbox cue-point labeling. The original dataset artifact was created as JSON and later converted to JSONL to match the label-file format expected by the SongFormer architecture. The canonical source of truth for labels in this repository is `data/dataset.jsonl`.
+EDM-98 was created from a curated 98-song set with Rekordbox cue-point labeling. The original dataset artifact was created as JSON and later converted to JSONL to match the label-file format expected by the SongFormer architecture.
+
+When installed from PyPI, the dataset and split files are loaded from packaged resources inside `edm98`. In the source repository, the same canonical artifacts also exist under `data/` for inspection and development.
 
 The primary labels exposed by the EDMFormer setup are:
 
@@ -23,6 +25,114 @@ The primary labels exposed by the EDMFormer setup are:
 - `breakdown`
 - `outro`
 - `silence`
+
+Each packaged dataset record currently includes:
+
+- `id`: the Deezer track identifier used as the canonical record ID
+- `labels`: a strictly increasing list of `[time, label]` pairs terminated by `end`
+- `file_path`: the original filename used during labeling when available
+
+For local preprocessing and training, the canonical audio contract is that each downloaded song is stored as `<deezer_id>.<ext>`, for example `1060564312.mp3`. `file_path` is preserved as provenance metadata, not as the primary lookup key.
+
+The package does not redistribute the audio itself. The Deezer IDs are included so users can map the metadata back to externally downloaded audio.
+
+## Accessing The Dataset
+
+Load the canonical packaged dataset:
+
+```python
+from edm98.loaders import load_dataset_records, load_all_splits, load_records_by_split
+
+records = load_dataset_records()
+splits = load_all_splits()
+train_records = load_records_by_split("train")
+```
+
+Example record shape:
+
+```python
+{
+    "id": "1060564312",
+    "labels": [
+        (0.054, "intro"),
+        (35.942, "buildup"),
+        (58.38, "silence"),
+        (62.866, "drop"),
+        ...
+        (247.0, "end"),
+    ],
+    "file_path": "01 - Oak - Airwalk.mp3",
+}
+```
+
+If you have downloaded the corresponding audio externally, you can join the metadata back to a local music directory by Deezer ID. For example:
+
+```python
+from pathlib import Path
+
+from edm98.loaders import load_dataset_records
+
+audio_dir = Path("/path/to/downloaded/audio")
+records = load_dataset_records()
+extensions = (".mp3", ".wav", ".flac", ".m4a")
+
+for record in records:
+    for ext in extensions:
+        candidate = audio_dir / f"{record['id']}{ext}"
+        if candidate.exists():
+            print(record["id"], candidate, record["labels"][:3])
+            break
+```
+
+This assumes you have already acquired the audio separately. `edm98` provides the labels, IDs, and split definitions; it does not fetch or ship the songs.
+
+## Training Preparation
+
+`edm98` is primarily a dataset package, but the packaged labels and split files can also be used as the canonical dataset-side inputs for EDMFormer-style training.
+
+The repository includes a simple notebook at [notebooks/edm98_training_prep.ipynb](/Users/sahal/Desktop/ohms/code/WATAI/EDM-98/notebooks/edm98_training_prep.ipynb) that shows:
+
+- how to load the packaged metadata and split IDs
+- how to map dataset records back to externally downloaded audio
+- how to structure the four embedding directories EDMFormer expects
+- how to construct the minimal train/eval dataset configuration
+
+The audio itself is still external. A typical flow is:
+
+1. Install `edm98` and load the packaged records.
+2. Download the songs separately using the provided Deezer IDs and store them as `<deezer_id>.<ext>`.
+3. Generate the MuQ and MusicFM embeddings required by EDMFormer.
+4. Point your training configuration at the packaged JSONL labels and split files.
+
+Minimal example:
+
+```python
+from pathlib import Path
+
+from edm98.loaders import load_records_by_split
+
+audio_dir = Path("/path/to/downloaded/audio")
+train_records = load_records_by_split("train")
+extensions = (".mp3", ".wav", ".flac", ".m4a")
+
+resolved = []
+for record in train_records:
+    for ext in extensions:
+        candidate = audio_dir / f"{record['id']}{ext}"
+        if candidate.exists():
+            resolved.append(
+                {
+                    "id": record["id"],
+                    "audio_path": candidate,
+                    "labels": record["labels"],
+                }
+            )
+            break
+
+resolved[:2]
+```
+
+That resolved list is the starting point for a preprocessing step that generates the EDMFormer-compatible MuQ and MusicFM embedding directories used during training.
 
 ## Installation
 
@@ -66,7 +176,7 @@ python -m edm98.cli predict --no-cache path/to/song.mp3
 Validate the dataset:
 
 ```bash
-python -m edm98.cli validate-dataset data/dataset.jsonl --splits-dir data/splits
+python -m edm98.cli validate-dataset
 ```
 
 Run inference on one file:
@@ -203,7 +313,7 @@ This is the same pattern used by the Gradio app.
 Dataset validation:
 
 ```bash
-python -m edm98.cli validate-dataset data/dataset.jsonl --splits-dir data/splits
+python -m edm98.cli validate-dataset
 ```
 
 Test suite:

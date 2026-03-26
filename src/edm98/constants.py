@@ -15,5 +15,7 @@ DATASET_TYPE = "EDMFormer"
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DATA_DIR = PACKAGE_ROOT / "data"
-DEFAULT_DATASET_PATH = DEFAULT_DATA_DIR / "dataset.jsonl"
-DEFAULT_SPLITS_DIR = DEFAULT_DATA_DIR / "splits"
+PACKAGE_RESOURCES_PACKAGE = "edm98.resources"
+PACKAGE_SPLITS_PACKAGE = "edm98.resources.splits"
+DEFAULT_DATASET_PATH = "dataset.jsonl"
+DEFAULT_SPLITS_DIR = None

@@ -54,7 +54,12 @@ def build_parser() -> argparse.ArgumentParser:
     validate = subparsers.add_parser(
         "validate-dataset", help="Validate an EDM-98 dataset JSONL file."
     )
-    validate.add_argument("dataset_path")
+    validate.add_argument(
+        "dataset_path",
+        nargs="?",
+        default=None,
+        help="Optional dataset path. Defaults to the packaged EDM-98 dataset.",
+    )
     validate.add_argument(
         "--splits-dir",
         default=None,
