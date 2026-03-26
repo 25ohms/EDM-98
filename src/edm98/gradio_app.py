@@ -195,11 +195,12 @@ window.edm98InitPlayer = function (id) {
 
   const audio = root.querySelector("audio");
   const button = root.querySelector("[data-role='toggle']");
+  const stage = root.querySelector("[data-role='stage']");
   const playhead = root.querySelector("[data-role='playhead']");
   const current = root.querySelector("[data-role='current']");
   const total = root.querySelector("[data-role='total']");
 
-  if (!audio || !button || !playhead || !current || !total) return;
+  if (!audio || !button || !stage || !playhead || !current || !total) return;
 
   const formatTime = (seconds) => {
     const safe = Math.max(0, Number(seconds || 0));
@@ -222,6 +223,16 @@ window.edm98InitPlayer = function (id) {
       audio.play();
     } else {
       audio.pause();
+    }
+  });
+
+  stage.addEventListener("click", (event) => {
+    const rect = stage.getBoundingClientRect();
+    const ratio = rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0;
+    const clamped = Math.min(Math.max(ratio, 0), 1);
+    if (audio.duration) {
+      audio.currentTime = clamped * audio.duration;
+      sync();
     }
   });
 
@@ -262,7 +273,7 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     <button data-role="toggle" class="edm98-play">Play</button>
     <div class="edm98-time"><span data-role="current">0:00</span> / <span data-role="total">{_format_clock(duration)}</span></div>
   </div>
-  <div class="edm98-waveform-stage">
+  <div class="edm98-waveform-stage" data-role="stage">
     <div class="edm98-waveform-svg">{waveform_svg}</div>
     <div class="edm98-playhead" data-role="playhead"></div>
   </div>
@@ -304,6 +315,7 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     border-radius: 18px;
     box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.18);
     background: linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(239,245,252,0.96) 100%);
+    cursor: pointer;
   }}
   .edm98-waveform-svg {{
     width: 100%;
@@ -348,12 +360,13 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     gap: 8px;
     padding: 8px 12px;
     border-radius: 999px;
-    background: rgba(255,255,255,0.96);
-    border: 1px solid rgba(100, 116, 139, 0.26);
-    color: #111827;
+    background: #ffffff;
+    border: 1px solid rgba(71, 85, 105, 0.34);
+    color: #020617;
     font-family: Helvetica, Arial, sans-serif;
     font-size: 0.92rem;
     font-weight: 800;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
   }}
   .edm98-legend-swatch {{
     width: 12px;
@@ -640,6 +653,7 @@ def launch_demo(
         offline=offline,
         no_cache=no_cache,
     )
+    demo = demo.queue(default_concurrency_limit=1)
     return demo.launch(
         server_name=server_name,
         server_port=server_port,
