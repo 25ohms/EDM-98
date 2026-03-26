@@ -89,6 +89,12 @@ Recommended first-time setup:
 export PYTHONPATH="$PWD/src:$PWD/third_party:$PYTHONPATH"
 ```
 
+To launch the Gradio app, also install the UI extra:
+
+```bash
+pip install -e ".[ui]"
+```
+
 The repository does not track `third_party/musicfm`; the install script provisions it locally for inference use.
 
 ### Local validation
@@ -121,9 +127,35 @@ edm98 validate-dataset path/to/dataset.jsonl
 edm98 demo
 ```
 
+### Gradio demo
+
+The Gradio app uses the same inference backend as `edm98 predict`.
+It renders:
+
+- a color-coded waveform timeline
+- labeled section regions
+- a moving playhead during playback
+- the raw prediction JSON alongside the segment table
+
+For local or Vertex AI Workbench use:
+
+```bash
+./scripts/install_inference_deps.sh
+pip install -e ".[ui]"
+export PYTHONPATH="$PWD/src:$PWD/third_party:$PYTHONPATH"
+python -m edm98.cli demo --device cuda --low-memory --server-name 0.0.0.0 --server-port 7860
+```
+
+You can also launch it directly:
+
+```bash
+python -m edm98.gradio_app
+```
+
+In JupyterLab or Vertex AI Workbench, the app is typically reachable through the proxied port URL for `7860`. If needed, add `--share` to request a temporary public Gradio link.
+
 ## Next Work
 
 - define the canonical public schema
 - add the packaged inference core
-- add the CLI and Gradio app
 - publish dataset and checkpoint documentation

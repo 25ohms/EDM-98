@@ -50,7 +50,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional directory containing train.txt, test.txt, and val.txt.",
     )
 
-    subparsers.add_parser("demo", help="Launch the Gradio demo.")
+    demo = subparsers.add_parser("demo", help="Launch the Gradio demo.")
+    demo.add_argument("--checkpoint", default=None)
+    demo.add_argument("--config", default=None)
+    demo.add_argument("--musicfm-stat", default=None)
+    demo.add_argument("--musicfm-model", default=None)
+    demo.add_argument(
+        "--low-memory",
+        action="store_true",
+        help="Use a lower-memory blockwise inference path.",
+    )
+    demo.add_argument(
+        "--device",
+        default="auto",
+        choices=["auto", "cpu", "cuda", "mps"],
+        help="Device selection for inference.",
+    )
+    demo.add_argument("--server-name", default="0.0.0.0")
+    demo.add_argument("--server-port", type=int, default=7860)
+    demo.add_argument(
+        "--share",
+        action="store_true",
+        help="Request a public Gradio share link.",
+    )
 
     return parser
 
@@ -105,6 +127,22 @@ def main() -> int:
             )
         else:
             print(__import__("json").dumps(prediction, indent=2))
+        return 0
+
+    if args.command == "demo":
+        from .gradio_app import launch_demo
+
+        launch_demo(
+            checkpoint_path=args.checkpoint,
+            config_path=args.config,
+            musicfm_stat_path=args.musicfm_stat,
+            musicfm_model_path=args.musicfm_model,
+            device=args.device,
+            low_memory=args.low_memory,
+            server_name=args.server_name,
+            server_port=args.server_port,
+            share=args.share,
+        )
         return 0
 
     raise SystemExit("CLI command not implemented yet.")
