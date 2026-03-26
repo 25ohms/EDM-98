@@ -196,15 +196,20 @@ def build_demo(
             raise gr.Error("Upload an audio file before running inference.")
 
         audio_path = Path(audio_file)
-        prediction = predict_file(
-            audio_path,
-            checkpoint_path=checkpoint_path,
-            config_path=config_path,
-            musicfm_stat_path=musicfm_stat_path,
-            musicfm_model_path=musicfm_model_path,
-            device=device,
-            low_memory=low_memory,
-        )
+        kwargs = {
+            "device": device,
+            "low_memory": low_memory,
+        }
+        if checkpoint_path is not None:
+            kwargs["checkpoint_path"] = checkpoint_path
+        if config_path is not None:
+            kwargs["config_path"] = config_path
+        if musicfm_stat_path is not None:
+            kwargs["musicfm_stat_path"] = musicfm_stat_path
+        if musicfm_model_path is not None:
+            kwargs["musicfm_model_path"] = musicfm_model_path
+
+        prediction = predict_file(audio_path, **kwargs)
         return (
             _format_segments(prediction),
             json.dumps(prediction, indent=2),
