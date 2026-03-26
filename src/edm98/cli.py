@@ -74,6 +74,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Request a public Gradio share link.",
     )
 
+    warm_cache = subparsers.add_parser(
+        "warm-cache",
+        help="Preload MuQ and MusicFM Hugging Face-backed assets into the local cache.",
+    )
+    warm_cache.add_argument("--musicfm-stat", default=None)
+    warm_cache.add_argument("--musicfm-model", default=None)
+    warm_cache.add_argument(
+        "--device",
+        default="cpu",
+        choices=["auto", "cpu", "cuda", "mps"],
+        help="Device selection for cache warming.",
+    )
+    warm_cache.add_argument("--hf-cache-dir", default=None)
+    warm_cache.add_argument(
+        "--offline",
+        action="store_true",
+        help="Require all Hugging Face-backed assets to already exist locally.",
+    )
+
     return parser
 
 
@@ -143,6 +162,22 @@ def main() -> int:
             server_port=args.server_port,
             share=args.share,
         )
+        return 0
+
+    if args.command == "warm-cache":
+        from .inference import warm_model_cache
+
+        kwargs = {
+            "device": args.device,
+            "offline": args.offline,
+        }
+        if args.musicfm_stat:
+            kwargs["musicfm_stat_path"] = args.musicfm_stat
+        if args.musicfm_model:
+            kwargs["musicfm_model_path"] = args.musicfm_model
+        if args.hf_cache_dir:
+            kwargs["hf_cache_dir"] = args.hf_cache_dir
+        warm_model_cache(**kwargs)
         return 0
 
     raise SystemExit("CLI command not implemented yet.")

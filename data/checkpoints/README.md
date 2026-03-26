@@ -36,6 +36,23 @@ Additional inference assets expected by the current optional inference path:
 
 These correspond to MusicFM weights and should be documented alongside any setup instructions.
 
+MuQ and MusicFM also rely on Hugging Face-backed upstream assets. By default, `EDM-98`
+uses a local cache directory at:
+
+- `.cache/huggingface/`
+
+You can prefetch those assets once with:
+
+```bash
+python -m edm98.cli warm-cache
+```
+
+After the cache is populated, local-only reuse can be enforced with:
+
+```bash
+python -m edm98.cli warm-cache --offline
+```
+
 Large binary checkpoint assets in this directory should be tracked with Git LFS.
 At present, this applies to:
 

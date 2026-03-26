@@ -42,3 +42,29 @@ def test_demo_cli_invokes_launcher(monkeypatch) -> None:
     assert called["device"] == "cpu"
     assert called["low_memory"] is True
     assert called["server_port"] == 9999
+
+
+def test_warm_cache_cli_invokes_helper(monkeypatch) -> None:
+    called = {}
+
+    def fake_warm_model_cache(**kwargs):
+        called.update(kwargs)
+
+    monkeypatch.setattr("edm98.inference.warm_model_cache", fake_warm_model_cache)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "edm98",
+            "warm-cache",
+            "--device",
+            "cuda",
+            "--offline",
+            "--hf-cache-dir",
+            "/tmp/edm98-cache",
+        ],
+    )
+    code = main()
+    assert code == 0
+    assert called["device"] == "cuda"
+    assert called["offline"] is True
+    assert called["hf_cache_dir"] == "/tmp/edm98-cache"

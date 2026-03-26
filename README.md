@@ -97,6 +97,23 @@ pip install -e ".[ui]"
 
 The repository does not track `third_party/musicfm`; the install script provisions it locally for inference use.
 
+Hugging Face-backed model assets are cached locally by default under:
+
+- `.cache/huggingface/`
+
+To prefetch those assets once and then reuse them locally:
+
+```bash
+python -m edm98.cli warm-cache
+```
+
+After the cache is populated, you can force local-only resolution with:
+
+```bash
+python -m edm98.cli warm-cache --offline
+python -m edm98.cli predict --device cuda --low-memory path/to/song.mp3
+```
+
 ### Local validation
 
 Dataset-only validation:

@@ -1,7 +1,9 @@
 import importlib
+import inspect
 import json
 import logging
 import math
+import os
 import sys
 import gc
 from contextlib import contextmanager
@@ -22,6 +24,7 @@ CONFIG_PATH = DEFAULT_DATA_DIR.parent / "configs" / "edmformer.yaml"
 DEFAULT_CHECKPOINT_PATH = DEFAULT_DATA_DIR / "checkpoints" / "model.pt"
 DEFAULT_MUSICFM_STAT_PATH = DEFAULT_DATA_DIR / "checkpoints" / "msd_stats.json"
 DEFAULT_MUSICFM_MODEL_PATH = DEFAULT_DATA_DIR / "checkpoints" / "pretrained_msd.pt"
+DEFAULT_HF_CACHE_DIR = DEFAULT_DATA_DIR.parent / ".cache" / "huggingface"
 
 INPUT_SAMPLING_RATE = 24000
 TIME_DUR = 420
@@ -132,6 +135,51 @@ def _resolve_device(requested: str | None) -> torch.device:
     return torch.device("cpu")
 
 
+def _configure_hf_cache(
+    cache_dir: str | Path = DEFAULT_HF_CACHE_DIR,
+    offline: bool = False,
+) -> Path:
+    cache_path = Path(cache_dir)
+    cache_path.mkdir(parents=True, exist_ok=True)
+    hub_path = cache_path / "hub"
+    hub_path.mkdir(parents=True, exist_ok=True)
+
+    os.environ["HF_HOME"] = str(cache_path)
+    os.environ["HUGGINGFACE_HUB_CACHE"] = str(hub_path)
+    os.environ["TRANSFORMERS_CACHE"] = str(cache_path / "transformers")
+
+    if offline:
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    else:
+        os.environ.pop("HF_HUB_OFFLINE", None)
+        os.environ.pop("TRANSFORMERS_OFFLINE", None)
+
+    LOGGER.info("Using Hugging Face cache directory: %s", cache_path)
+    if offline:
+        LOGGER.info("Hugging Face local-only mode enabled")
+    return cache_path
+
+
+def _call_with_optional_kwargs(func, *args, **kwargs):
+    try:
+        signature = inspect.signature(func)
+    except (TypeError, ValueError):
+        signature = None
+
+    if signature is None:
+        try:
+            return func(*args, **kwargs)
+        except TypeError:
+            filtered = {key: value for key, value in kwargs.items() if key != "local_files_only"}
+            return func(*args, **filtered)
+
+    supported = {
+        key: value for key, value in kwargs.items() if key in signature.parameters
+    }
+    return func(*args, **supported)
+
+
 def _load_muq():
     try:
         from muq import MuQ
@@ -186,9 +234,13 @@ class InferencePipeline:
         dataset_label: str = "EDMFormer",
         apply_rule_postprocessing: bool = True,
         low_memory: bool = False,
+        hf_cache_dir: str | Path = DEFAULT_HF_CACHE_DIR,
+        offline: bool = False,
     ):
         self.device = _resolve_device(device)
         LOGGER.info("Using device: %s", self.device)
+        self.hf_cache_dir = _configure_hf_cache(hf_cache_dir, offline=offline)
+        self.offline = offline
         self.config = load_config(config_path)
         self.dataset_label = dataset_label
         self.apply_rule_postprocessing = apply_rule_postprocessing
@@ -229,7 +281,12 @@ class InferencePipeline:
     def _create_muq_model(self):
         MuQ = _load_muq()
         LOGGER.info("Initializing MuQ model")
-        model = MuQ.from_pretrained("OpenMuQ/MuQ-large-msd-iter")
+        model = _call_with_optional_kwargs(
+            MuQ.from_pretrained,
+            "OpenMuQ/MuQ-large-msd-iter",
+            cache_dir=str(self.hf_cache_dir),
+            local_files_only=self.offline,
+        )
         model = model.to(self.device).eval()
         LOGGER.info("Initialized MuQ model")
         return model
@@ -432,6 +489,35 @@ class InferencePipeline:
                 }
             )
         return output
+
+
+def warm_model_cache(
+    musicfm_stat_path: str | Path = DEFAULT_MUSICFM_STAT_PATH,
+    musicfm_model_path: str | Path = DEFAULT_MUSICFM_MODEL_PATH,
+    device: str | None = "cpu",
+    hf_cache_dir: str | Path = DEFAULT_HF_CACHE_DIR,
+    offline: bool = False,
+):
+    resolved_device = _resolve_device(device)
+    cache_path = _configure_hf_cache(hf_cache_dir, offline=offline)
+    LOGGER.info("Warming inference model cache on device: %s", resolved_device)
+
+    MuQ = _load_muq()
+    _call_with_optional_kwargs(
+        MuQ.from_pretrained,
+        "OpenMuQ/MuQ-large-msd-iter",
+        cache_dir=str(cache_path),
+        local_files_only=offline,
+    )
+
+    MusicFM25Hz = _load_musicfm()
+    with _torch_load_weights_only_false():
+        MusicFM25Hz(
+            is_flash=False,
+            stat_path=str(musicfm_stat_path),
+            model_path=str(musicfm_model_path),
+        )
+    LOGGER.info("Inference model cache is ready")
 
 
 def predict_file(audio_path: str | Path, **kwargs):
