@@ -48,6 +48,10 @@ def _format_clock(seconds: float) -> str:
     return f"{minutes}:{remainder:02d}"
 
 
+def _format_seconds(seconds: float) -> str:
+    return f"{float(seconds):.2f}s"
+
+
 def _build_segment_table_html(prediction: list[dict[str, float | str]]) -> str:
     rows = []
     for segment in prediction:
@@ -212,11 +216,16 @@ window.edm98InitPlayer = function (id) {
     return `${mins}:${secs}`;
   };
 
+  const formatSeconds = (seconds) => {
+    const safe = Math.max(0, Number(seconds || 0));
+    return `${safe.toFixed(2)}s`;
+  };
+
   const sync = () => {
     const duration = Number(audio.duration || 0);
     const currentTime = Number(audio.currentTime || 0);
-    total.textContent = formatTime(duration);
-    current.textContent = formatTime(currentTime);
+    total.textContent = `${formatTime(duration)} (${formatSeconds(duration)})`;
+    current.textContent = `${formatTime(currentTime)} (${formatSeconds(currentTime)})`;
     const ratio = duration > 0 ? Math.min(currentTime / duration, 1) : 0;
     playhead.style.left = `${ratio * 100}%`;
   };
@@ -305,10 +314,14 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
 <div id="{html_id}" class="edm98-waveform-shell" data-player-id="{html_id}">
   <div class="edm98-toolbar">
     <button data-role="toggle" class="edm98-play" type="button" title="Play or pause audio" aria-label="Play"><span aria-hidden="true">▶</span></button>
-    <div class="edm98-time"><span data-role="current">0:00</span> / <span data-role="total">{_format_clock(duration)}</span></div>
   </div>
   <div class="edm98-waveform-stage" data-role="stage">
     <div class="edm98-waveform-svg">{waveform_svg}</div>
+    <div class="edm98-time" data-role="time-display">
+      <span data-role="current">0:00 ({_format_seconds(0)})</span>
+      <span class="edm98-time-separator">/</span>
+      <span data-role="total">{_format_clock(duration)} ({_format_seconds(duration)})</span>
+    </div>
     <div class="edm98-playhead" data-role="playhead"></div>
   </div>
   <div class="edm98-legend">{legend_html}</div>
@@ -327,7 +340,7 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
   .edm98-toolbar {{
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: 12px;
     margin-bottom: 14px;
   }}
@@ -384,13 +397,28 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     cursor: ew-resize;
   }}
   .edm98-time {{
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid rgba(30, 41, 59, 0.16);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
     font-family: Helvetica, Arial, sans-serif;
-    font-size: 1rem;
-    font-weight: 800;
+    font-size: 0.98rem;
+    font-weight: 900;
     color: #0f172a;
     letter-spacing: 0.02em;
     font-variant-numeric: tabular-nums;
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+    white-space: nowrap;
+  }}
+  .edm98-time-separator {{
+    color: #475569;
   }}
   .edm98-waveform-shell audio {{
     width: 100%;
