@@ -78,12 +78,14 @@ python -m edm98.cli predict --device cuda --low-memory path/to/song.mp3
 Launch the Gradio demo:
 
 ```bash
-python -m edm98.cli demo --device cuda --low-memory --server-name 0.0.0.0 --server-port 7860
+python -m edm98.cli demo --device cuda --server-name 0.0.0.0 --server-port 7860
 ```
 
 ## Gradio Demo
 
 The Gradio app uses the same inference backend as the CLI and preloads the inference pipeline when the app starts. That pipeline stays alive until the process exits, so the app does not rebuild the full EDMFormer, MuQ, and MusicFM stack for every request.
+
+The demo is intentionally persistent. Start it once, keep the process running, and reuse the loaded pipeline until you close the app.
 
 The demo currently provides:
 
@@ -99,10 +101,70 @@ To launch the demo:
 ./scripts/install_inference_deps.sh
 pip install -e ".[ui]"
 export PYTHONPATH="$PWD/src:$PWD/third_party:$PYTHONPATH"
-python -m edm98.cli demo --device cuda --low-memory --server-name 0.0.0.0 --server-port 7860
+python -m edm98.cli demo --device cuda --server-name 0.0.0.0 --server-port 7860
 ```
 
 If you are running on a remote machine, expose or forward the chosen port and open the forwarded local URL in your browser.
+
+### Demo Options
+
+Useful demo flags:
+
+- `--device auto`: pick the best available backend automatically
+- `--device cuda`: run on an NVIDIA GPU
+- `--device mps`: run on Apple Silicon via Metal
+- `--device cpu`: force CPU inference
+- `--server-name 0.0.0.0`: bind on all interfaces so you can forward or expose the port
+- `--server-port 7860`: choose a different port if needed
+- `--offline`: require Hugging Face-backed assets to already exist in the local cache
+- `--no-cache`: use a temporary cache directory for this run
+- `--hf-cache-dir <path>`: override the default Hugging Face cache location
+
+`--low-memory` is useful for one-off CLI prediction runs, but it is not the intended mode for the Gradio demo. The demo is designed to keep its models resident until shutdown.
+
+## Platform Notes
+
+The CLI currently supports `--device auto`, `--device cpu`, `--device cuda`, and `--device mps`.
+
+### Linux
+
+Linux is the most straightforward setup for GPU-backed demo usage.
+
+- NVIDIA GPU: use `--device cuda`
+- CPU-only: use `--device cpu`
+- Typical demo launch:
+
+```bash
+./scripts/install_inference_deps.sh
+pip install -e ".[ui]"
+export PYTHONPATH="$PWD/src:$PWD/third_party:$PYTHONPATH"
+python -m edm98.cli demo --device cuda --server-name 0.0.0.0 --server-port 7860
+```
+
+### macOS
+
+On Apple Silicon, use Metal via `--device mps`.
+
+- Apple Silicon demo launch:
+
+```bash
+./scripts/install_inference_deps.sh
+pip install -e ".[ui]"
+export PYTHONPATH="$PWD/src:$PWD/third_party:$PYTHONPATH"
+python -m edm98.cli demo --device mps --server-name 127.0.0.1 --server-port 7860
+```
+
+- If MPS is unavailable or unstable in your local environment, fall back to `--device cpu`
+
+### Windows
+
+The supported install helper in this repository is `scripts/install_inference_deps.sh`, which is a Bash script. Because of that, the smoothest Windows path is currently a Bash-compatible environment such as WSL2 or Git Bash, with WSL2 being the more predictable choice for ML dependencies.
+
+- Windows + WSL2 + NVIDIA GPU: use `--device cuda`
+- Windows + WSL2 CPU-only: use `--device cpu`
+- If you want a browser on Windows to access a demo running inside WSL2, open the forwarded localhost URL from Windows after launch
+
+If you are running a fully native Windows Python environment instead of WSL2, the same CLI flags apply, but you will need to reproduce the install-script steps manually.
 
 ## Python API
 
@@ -121,7 +183,6 @@ from edm98.inference import create_pipeline
 
 pipeline = create_pipeline(
     device="cuda",
-    low_memory=True,
     persistent_models=True,
 )
 

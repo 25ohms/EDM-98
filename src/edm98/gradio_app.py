@@ -1,6 +1,6 @@
-import base64
 import mimetypes
 from pathlib import Path
+from urllib.parse import quote
 
 import numpy as np
 
@@ -91,12 +91,8 @@ def _build_segment_table_html(prediction: list[dict[str, float | str]]) -> str:
     </div>
     """
 
-
-def _build_audio_data_url(audio_path: Path) -> str:
-    mime_type, _ = mimetypes.guess_type(audio_path.name)
-    mime_type = mime_type or "audio/mpeg"
-    encoded = base64.b64encode(audio_path.read_bytes()).decode("ascii")
-    return f"data:{mime_type};base64,{encoded}"
+def _build_audio_src(audio_path: Path) -> str:
+    return f"/gradio_api/file={quote(str(audio_path))}"
 
 
 def _build_waveform_svg(audio_path: Path, prediction: list[dict[str, float | str]]) -> tuple[str, float, str]:
@@ -306,7 +302,7 @@ if (!window.edm98PlayerScannerStarted) {
 
 
 def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | str]]) -> str:
-    audio_data_url = _build_audio_data_url(audio_path)
+    audio_src = _build_audio_src(audio_path)
     waveform_svg, duration, legend_html = _build_waveform_svg(audio_path, prediction)
     html_id = f"waveform-{abs(hash((audio_path.name, tuple((row['label'], row['start'], row['end']) for row in prediction))))}"
 
@@ -325,7 +321,7 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     <div class="edm98-playhead" data-role="playhead"></div>
   </div>
   <div class="edm98-legend">{legend_html}</div>
-  <audio preload="metadata" src="{audio_data_url}"></audio>
+  <audio preload="metadata" src="{audio_src}"></audio>
 </div>
 <style>
   .edm98-waveform-shell {{
@@ -509,9 +505,14 @@ def build_demo(
 
         audio_path = Path(audio_file)
         prediction = pipeline.predict_file(audio_path, progress_callback=progress)
+        progress(0.97, desc="Rendering waveform")
+        waveform_html = _build_waveform_html(audio_path, prediction)
+        progress(0.99, desc="Rendering results table")
+        table_html = _build_segment_table_html(prediction)
+        progress(1.0, desc="Ready")
         return (
-            _build_waveform_html(audio_path, prediction),
-            _build_segment_table_html(prediction),
+            waveform_html,
+            table_html,
             gr.update(value="Inference complete.", visible=False),
             gr.update(visible=False),
             gr.update(visible=True),
