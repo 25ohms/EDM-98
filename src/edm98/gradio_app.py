@@ -133,6 +133,7 @@ def _build_waveform_svg(audio_path: Path, prediction: list[dict[str, float | str
         idx = jdx
 
     region_rects = []
+    region_labels = []
     legend_items = []
     for segment, run_length, run_position in zip(prediction, run_lengths, run_positions):
         start = float(segment["start"])
@@ -155,6 +156,16 @@ def _build_waveform_svg(audio_path: Path, prediction: list[dict[str, float | str
             f'<rect x="{start_x:.2f}" y="18" width="{region_width:.2f}" height="{height - 36}" '
             f'rx="14" ry="14" fill="{fill_color}" opacity="0.34" stroke="{border_color}" stroke-width="2"></rect>'
         )
+        if region_width >= 70:
+            label_x = start_x + (region_width / 2)
+            label_y = 48
+            label_text = label.replace("_", " ").title()
+            text_color = _darken_hex(base_color, 0.52)
+            region_labels.append(
+                f'<text x="{label_x:.2f}" y="{label_y:.2f}" text-anchor="middle" '
+                f'font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" '
+                f'fill="{text_color}" opacity="0.95">{label_text}</text>'
+            )
         legend_items.append(
             f"<span class='edm98-legend-chip'><span class='edm98-legend-swatch' "
             f"style='background:{base_color}; border-color:{border_color}'></span>"
@@ -178,6 +189,7 @@ def _build_waveform_svg(audio_path: Path, prediction: list[dict[str, float | str
         f'xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
         f'<rect x="0" y="0" width="{width}" height="{height}" rx="18" ry="18" fill="#f8fbff"></rect>'
         f'{"".join(region_rects)}'
+        f'{"".join(region_labels)}'
         f'{"".join(bars)}'
         "</svg>"
     )
@@ -348,11 +360,11 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     gap: 8px;
     padding: 8px 12px;
     border-radius: 999px;
-    background: rgba(255,255,255,0.82);
-    border: 1px solid rgba(148, 163, 184, 0.24);
+    background: rgba(255,255,255,0.96);
+    border: 1px solid rgba(100, 116, 139, 0.26);
     color: #0f172a;
     font-family: Helvetica, Arial, sans-serif;
-    font-size: 0.9rem;
+    font-size: 0.92rem;
     font-weight: 700;
   }}
   .edm98-legend-swatch {{
@@ -509,13 +521,6 @@ def build_demo(
           padding: 0;
           box-shadow: none;
         }
-        .edm98-results-grid {
-          width: 100%;
-          display: grid;
-          grid-template-columns: minmax(0, 1.65fr) minmax(360px, 0.95fr);
-          gap: 18px;
-          align-items: start;
-        }
         .edm98-results {
           width: 100%;
         }
@@ -572,11 +577,6 @@ def build_demo(
         .edm98-table tbody tr:nth-child(even) td {
           background: var(--edm-table-row-b);
         }
-        @media (max-width: 1100px) {
-          .edm98-results-grid {
-            grid-template-columns: 1fr;
-          }
-        }
         """,
     ) as demo:
         with gr.Column(elem_classes=["edm98-page"]):
@@ -594,9 +594,8 @@ def build_demo(
                     run_button = gr.Button("Run Inference", variant="primary")
 
             with gr.Column(elem_classes=["edm98-results-card"], visible=False) as results_panel:
-                with gr.Row(elem_classes=["edm98-results-grid"]):
-                    waveform_output = gr.HTML(elem_classes=["edm98-results"])
-                    segment_table = gr.HTML()
+                waveform_output = gr.HTML(elem_classes=["edm98-results"])
+                segment_table = gr.HTML()
                 with gr.Row(elem_classes=["edm98-reset-row"]):
                     reset_button = gr.Button("Choose Another Audio")
 
@@ -604,11 +603,13 @@ def build_demo(
             fn=run_inference,
             inputs=[audio_input],
             outputs=[waveform_output, segment_table, upload_panel, results_panel, reset_button],
+            show_progress="full",
         )
         reset_button.click(
             fn=reset_demo,
             inputs=[],
             outputs=[waveform_output, segment_table, upload_panel, results_panel, reset_button],
+            show_progress="hidden",
         )
 
     return demo
