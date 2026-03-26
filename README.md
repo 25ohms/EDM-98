@@ -15,7 +15,7 @@
 
 EDM-98 was created from a curated 98-song set with Rekordbox cue-point labeling. The original dataset artifact was created as JSON and later converted to JSONL to match the label-file format expected by the SongFormer architecture.
 
-When installed from PyPI, the dataset and split files are loaded from packaged resources inside `edm98`. In the source repository, the same canonical artifacts also exist under `data/` for inspection and development.
+The dataset and split files are loaded from packaged resources inside `edm98`, under `src/edm98/resources/`. That packaged copy is the canonical source used by the Python API and PyPI distribution.
 
 The primary labels exposed by the EDMFormer setup are:
 
@@ -329,4 +329,4 @@ pytest -q
 This repository uses separate licenses by component:
 
 - repository code and model-related materials: CC BY 4.0
-- dataset metadata and split files under `data/`: MIT
+- packaged dataset metadata and split files: MIT

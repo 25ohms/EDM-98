@@ -1,11 +1,11 @@
 # Data
 
-This directory is reserved for the canonical EDM-98 dataset artifact and related dataset documentation.
+This directory is reserved for local inference assets and related documentation.
 
-Planned contents:
+Current intended contents:
 
-- `dataset.jsonl`
-- schema notes
-- optional enriched metadata artifacts
+- checkpoint files used by the optional EDMFormer inference workflow
+- checkpoint documentation
+- licensing notes for non-package data assets
 
-The canonical label artifact should remain JSONL because the SongFormer training format expects JSONL label files.
+The canonical packaged dataset lives under `src/edm98/resources/`. It is included in the Python package and loaded through `edm98.loaders`.
