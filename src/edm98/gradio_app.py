@@ -407,14 +407,6 @@ def build_demo(
 
     pipeline = create_pipeline(**pipeline_kwargs)
 
-    def show_loading():
-        return (
-            gr.update(value="Running inference...", visible=True),
-            gr.update(visible=False),
-            gr.update(visible=False),
-            gr.update(visible=False),
-        )
-
     def run_inference(audio_file, progress=gr.Progress(track_tqdm=False)):
         if not audio_file:
             raise gr.Error("Upload an audio file before running inference.")
@@ -424,7 +416,7 @@ def build_demo(
         return (
             _build_waveform_html(audio_path, prediction),
             _build_segment_table_html(prediction),
-            gr.update(value="Inference complete.", visible=True),
+            gr.update(value="", visible=False),
             gr.update(visible=False),
             gr.update(visible=True),
             gr.update(visible=True),
@@ -607,11 +599,6 @@ def build_demo(
                     reset_button = gr.Button("Choose Another Audio")
 
         run_button.click(
-            fn=show_loading,
-            inputs=[],
-            outputs=[status_text, waveform_output, segment_table, results_panel],
-            show_progress="hidden",
-        ).then(
             fn=run_inference,
             inputs=[audio_input],
             outputs=[waveform_output, segment_table, status_text, upload_panel, results_panel, reset_button],
