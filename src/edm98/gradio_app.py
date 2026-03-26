@@ -1,7 +1,8 @@
 import base64
-import json
 import mimetypes
 from pathlib import Path
+
+import numpy as np
 
 
 LABEL_COLORS = {
@@ -44,41 +45,155 @@ def _build_audio_data_url(audio_path: Path) -> str:
     return f"data:{mime_type};base64,{encoded}"
 
 
-def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | str]]) -> str:
-    audio_data_url = _build_audio_data_url(audio_path)
-    regions = []
+def _build_waveform_svg(audio_path: Path, prediction: list[dict[str, float | str]]) -> tuple[str, float]:
+    import librosa
+
+    samples, sample_rate = librosa.load(audio_path, sr=None, mono=True)
+    duration = 0.0 if sample_rate <= 0 else float(len(samples) / sample_rate)
+    width = 1200
+    height = 260
+    center_y = height / 2
+    usable_height = height * 0.72
+
+    target_bars = 360
+    if len(samples) == 0:
+        peaks = np.zeros(target_bars, dtype=np.float32)
+    else:
+        trimmed = np.abs(samples[: (len(samples) // target_bars) * target_bars])
+        if trimmed.size == 0:
+            peaks = np.zeros(target_bars, dtype=np.float32)
+        else:
+            peaks = trimmed.reshape(target_bars, -1).max(axis=1)
+            max_peak = float(np.max(peaks))
+            if max_peak > 0:
+                peaks = peaks / max_peak
+
+    region_rects = []
     for segment in prediction:
+        start = float(segment["start"])
+        end = float(segment["end"])
         label = str(segment["label"])
         color = LABEL_COLORS.get(label, "#6C757D")
-        regions.append(
-            {
-                "start": float(segment["start"]),
-                "end": float(segment["end"]),
-                "content": label.replace("_", " ").title(),
-                "color": f"{color}66",
-                "drag": False,
-                "resize": False,
-            }
+        start_x = 0 if duration == 0 else (start / duration) * width
+        region_width = 0 if duration == 0 else max(((end - start) / duration) * width, 2)
+        region_rects.append(
+            f'<rect x="{start_x:.2f}" y="18" width="{region_width:.2f}" height="{height - 36}" '
+            f'rx="14" ry="14" fill="{color}" opacity="0.24"></rect>'
         )
 
-    html_id = f"waveform-{abs(hash((audio_path.name, tuple((r['start'], r['end'], r['content']) for r in regions))))}"
-    regions_json = json.dumps(regions)
+    bars = []
+    step = width / max(len(peaks), 1)
+    bar_width = max(step * 0.62, 1.5)
+    for idx, peak in enumerate(peaks):
+        bar_height = max(float(peak) * usable_height, 4)
+        x = idx * step + (step - bar_width) / 2
+        y = center_y - bar_height / 2
+        bars.append(
+            f'<rect x="{x:.2f}" y="{y:.2f}" width="{bar_width:.2f}" height="{bar_height:.2f}" '
+            f'rx="{bar_width / 2:.2f}" ry="{bar_width / 2:.2f}" fill="#0f172a" opacity="0.88"></rect>'
+        )
+
+    svg = (
+        f'<svg viewBox="0 0 {width} {height}" preserveAspectRatio="none" '
+        f'xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+        f'<rect x="0" y="0" width="{width}" height="{height}" rx="18" ry="18" fill="#f8fbff"></rect>'
+        f'{"".join(region_rects)}'
+        f'{"".join(bars)}'
+        "</svg>"
+    )
+    return svg, duration
+
+
+def _player_head() -> str:
+    return """
+<script>
+window.edm98Players = window.edm98Players || {};
+window.edm98InitPlayer = function (id) {
+  const root = document.getElementById(id);
+  if (!root || window.edm98Players[id]) return;
+
+  const audio = root.querySelector("audio");
+  const button = root.querySelector("[data-role='toggle']");
+  const playhead = root.querySelector("[data-role='playhead']");
+  const current = root.querySelector("[data-role='current']");
+  const total = root.querySelector("[data-role='total']");
+
+  if (!audio || !button || !playhead || !current || !total) return;
+
+  const formatTime = (seconds) => {
+    const safe = Math.max(0, Number(seconds || 0));
+    const mins = Math.floor(safe / 60);
+    const secs = Math.floor(safe % 60).toString().padStart(2, "0");
+    return `${mins}:${secs}`;
+  };
+
+  const sync = () => {
+    const duration = Number(audio.duration || 0);
+    const currentTime = Number(audio.currentTime || 0);
+    total.textContent = formatTime(duration);
+    current.textContent = formatTime(currentTime);
+    const ratio = duration > 0 ? Math.min(currentTime / duration, 1) : 0;
+    playhead.style.left = `${ratio * 100}%`;
+  };
+
+  button.addEventListener("click", () => {
+    if (audio.paused) {
+      audio.play();
+    } else {
+      audio.pause();
+    }
+  });
+
+  audio.addEventListener("loadedmetadata", sync);
+  audio.addEventListener("timeupdate", sync);
+  audio.addEventListener("pause", () => { button.textContent = "Play"; sync(); });
+  audio.addEventListener("play", () => { button.textContent = "Pause"; sync(); });
+  audio.addEventListener("ended", () => { button.textContent = "Play"; sync(); });
+
+  sync();
+  window.edm98Players[id] = true;
+};
+
+window.edm98ScanPlayers = function () {
+  document.querySelectorAll(".edm98-waveform-shell[data-player-id]").forEach((node) => {
+    const id = node.getAttribute("data-player-id");
+    if (id) window.edm98InitPlayer(id);
+  });
+};
+
+if (!window.edm98PlayerScannerStarted) {
+  window.edm98PlayerScannerStarted = true;
+  window.addEventListener("load", window.edm98ScanPlayers);
+  setInterval(window.edm98ScanPlayers, 500);
+}
+</script>
+"""
+
+
+def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | str]]) -> str:
+    audio_data_url = _build_audio_data_url(audio_path)
+    waveform_svg, duration = _build_waveform_svg(audio_path, prediction)
+    html_id = f"waveform-{abs(hash((audio_path.name, tuple((row['label'], row['start'], row['end']) for row in prediction))))}"
 
     return f"""
-<div class="edm98-waveform-shell">
+<div id="{html_id}" class="edm98-waveform-shell" data-player-id="{html_id}">
   <div class="edm98-toolbar">
-    <button id="{html_id}-play" class="edm98-play">Play / Pause</button>
-    <div class="edm98-time"><span id="{html_id}-current">0:00</span> / <span id="{html_id}-total">0:00</span></div>
+    <button data-role="toggle" class="edm98-play">Play</button>
+    <div class="edm98-time"><span data-role="current">0:00</span> / <span data-role="total">{_format_clock(duration)}</span></div>
   </div>
-  <div id="{html_id}" class="edm98-waveform"></div>
+  <div class="edm98-waveform-stage">
+    <div class="edm98-waveform-svg">{waveform_svg}</div>
+    <div class="edm98-playhead" data-role="playhead"></div>
+  </div>
+  <audio preload="metadata" src="{audio_data_url}"></audio>
 </div>
 <style>
   .edm98-waveform-shell {{
     width: 100%;
     border: 1px solid #d7dde5;
-    border-radius: 20px;
-    padding: 18px 18px 10px;
-    background: linear-gradient(180deg, #fcfdff 0%, #eef4fb 100%);
+    border-radius: 22px;
+    padding: 18px;
+    background: linear-gradient(180deg, #fbfdff 0%, #edf3fb 100%);
     box-sizing: border-box;
     overflow: hidden;
   }}
@@ -98,84 +213,46 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     font-weight: 600;
     cursor: pointer;
   }}
-  .edm98-waveform {{
+  .edm98-waveform-stage {{
+    position: relative;
     width: 100%;
-    min-height: 220px;
+    min-height: 260px;
+    overflow: hidden;
+    border-radius: 18px;
+    box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.18);
+    background: linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(239,245,252,0.96) 100%);
+  }}
+  .edm98-waveform-svg {{
+    width: 100%;
+    height: 260px;
+  }}
+  .edm98-waveform-svg svg {{
+    display: block;
+    width: 100%;
+    height: 260px;
+  }}
+  .edm98-playhead {{
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 0%;
+    width: 2px;
+    background: linear-gradient(180deg, #ef4444 0%, #f97316 100%);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.32);
+    pointer-events: none;
+    transform: translateX(-1px);
   }}
   .edm98-time {{
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.95rem;
     color: #334155;
   }}
-  .edm98-waveform ::-webkit-scrollbar {{
-    display: none;
-  }}
-  .edm98-waveform region {{
-    border-radius: 12px;
-    overflow: hidden;
-  }}
-  .edm98-waveform region div {{
-    font-size: 0.8rem !important;
-    font-weight: 700 !important;
-    color: #0f172a !important;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    padding: 6px 8px !important;
+  .edm98-waveform-shell audio {{
+    width: 100%;
+    margin-top: 14px;
+    accent-color: #111827;
   }}
 </style>
-<script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
-<script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js"></script>
-<script>
-(() => {{
-  const container = document.getElementById("{html_id}");
-  if (!container) return;
-
-  const playButton = document.getElementById("{html_id}-play");
-  const currentTime = document.getElementById("{html_id}-current");
-  const totalTime = document.getElementById("{html_id}-total");
-
-  const formatTime = (seconds) => {{
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60).toString().padStart(2, "0");
-    return `${{mins}}:${{secs}}`;
-  }};
-
-  const regions = {regions_json};
-  const regionsPlugin = WaveSurfer.Regions.create();
-  const ws = WaveSurfer.create({{
-    container,
-    waveColor: "#94a3b8",
-    progressColor: "#0f172a",
-    cursorColor: "#ef4444",
-    cursorWidth: 2,
-    height: 220,
-    barWidth: 2,
-    barGap: 1,
-    fillParent: true,
-    normalize: true,
-    minPxPerSec: 120,
-    autoScroll: true,
-    autoCenter: true,
-    hideScrollbar: true,
-    url: "{audio_data_url}",
-    plugins: [regionsPlugin],
-  }});
-
-  ws.on("decode", (duration) => {{
-    totalTime.textContent = formatTime(duration);
-    regions.forEach((region) => regionsPlugin.addRegion(region));
-  }});
-
-  ws.on("timeupdate", (seconds) => {{
-    currentTime.textContent = formatTime(seconds);
-  }});
-
-  playButton.addEventListener("click", () => ws.playPause());
-  ws.on("play", () => {{ playButton.textContent = "Pause"; }});
-  ws.on("pause", () => {{ playButton.textContent = "Play"; }});
-  ws.on("finish", () => {{ playButton.textContent = "Play"; }});
-}})();
-</script>
 """
 
 
@@ -240,6 +317,7 @@ def build_demo(
 
     with gr.Blocks(
         title="EDM-98 Demo",
+        head=_player_head(),
         css="""
         .gradio-container {max-width: min(1600px, 98vw) !important;}
         .edm98-results {width: 100%;}
