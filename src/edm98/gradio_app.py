@@ -15,6 +15,32 @@ LABEL_COLORS = {
 }
 
 
+def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    stripped = hex_color.lstrip("#")
+    return tuple(int(stripped[idx : idx + 2], 16) for idx in (0, 2, 4))
+
+
+def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
+    return "#" + "".join(f"{max(0, min(255, value)):02x}" for value in rgb)
+
+
+def _mix_hex(base: str, target: str, ratio: float) -> str:
+    base_rgb = _hex_to_rgb(base)
+    target_rgb = _hex_to_rgb(target)
+    mixed = tuple(
+        round(base_rgb[idx] * (1 - ratio) + target_rgb[idx] * ratio) for idx in range(3)
+    )
+    return _rgb_to_hex(mixed)
+
+
+def _darken_hex(color: str, amount: float = 0.28) -> str:
+    return _mix_hex(color, "#0f172a", amount)
+
+
+def _lighten_hex(color: str, amount: float = 0.22) -> str:
+    return _mix_hex(color, "#ffffff", amount)
+
+
 def _format_clock(seconds: float) -> str:
     whole_seconds = int(seconds)
     minutes = whole_seconds // 60
@@ -22,20 +48,44 @@ def _format_clock(seconds: float) -> str:
     return f"{minutes}:{remainder:02d}"
 
 
-def _format_segments(prediction: list[dict[str, float | str]]) -> list[list[str | float]]:
+def _build_segment_table_html(prediction: list[dict[str, float | str]]) -> str:
     rows = []
     for segment in prediction:
+        label = str(segment["label"]).replace("_", " ").title()
         start = float(segment["start"])
         end = float(segment["end"])
+        duration = end - start
         rows.append(
-            [
-                str(segment["label"]).replace("_", " ").title(),
-                f"{start:.3f}s ({_format_clock(start)})",
-                f"{end:.3f}s ({_format_clock(end)})",
-                f"{(end - start):.3f}s ({_format_clock(end - start)})",
-            ]
+            f"""
+            <tr>
+              <td>{label}</td>
+              <td>{start:.3f}s <span>({_format_clock(start)})</span></td>
+              <td>{end:.3f}s <span>({_format_clock(end)})</span></td>
+              <td>{duration:.3f}s <span>({_format_clock(duration)})</span></td>
+            </tr>
+            """
         )
-    return rows
+
+    return f"""
+    <div class="edm98-table-card">
+      <div class="edm98-table-title">Predicted Segments</div>
+      <div class="edm98-table-shell">
+        <table class="edm98-table">
+          <thead>
+            <tr>
+              <th>Label</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Duration</th>
+            </tr>
+          </thead>
+          <tbody>
+            {"".join(rows)}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    """
 
 
 def _build_audio_data_url(audio_path: Path) -> str:
@@ -45,7 +95,7 @@ def _build_audio_data_url(audio_path: Path) -> str:
     return f"data:{mime_type};base64,{encoded}"
 
 
-def _build_waveform_svg(audio_path: Path, prediction: list[dict[str, float | str]]) -> tuple[str, float]:
+def _build_waveform_svg(audio_path: Path, prediction: list[dict[str, float | str]]) -> tuple[str, float, str]:
     import librosa
 
     samples, sample_rate = librosa.load(audio_path, sr=None, mono=True)
@@ -54,8 +104,8 @@ def _build_waveform_svg(audio_path: Path, prediction: list[dict[str, float | str
     height = 260
     center_y = height / 2
     usable_height = height * 0.72
-
     target_bars = 360
+
     if len(samples) == 0:
         peaks = np.zeros(target_bars, dtype=np.float32)
     else:
@@ -68,17 +118,47 @@ def _build_waveform_svg(audio_path: Path, prediction: list[dict[str, float | str
             if max_peak > 0:
                 peaks = peaks / max_peak
 
+    run_lengths: list[int] = []
+    run_positions: list[int] = []
+    idx = 0
+    while idx < len(prediction):
+        label = str(prediction[idx]["label"])
+        jdx = idx
+        while jdx < len(prediction) and str(prediction[jdx]["label"]) == label:
+            jdx += 1
+        run_length = jdx - idx
+        for position in range(run_length):
+            run_lengths.append(run_length)
+            run_positions.append(position)
+        idx = jdx
+
     region_rects = []
-    for segment in prediction:
+    legend_items = []
+    for segment, run_length, run_position in zip(prediction, run_lengths, run_positions):
         start = float(segment["start"])
         end = float(segment["end"])
         label = str(segment["label"])
-        color = LABEL_COLORS.get(label, "#6C757D")
+        base_color = LABEL_COLORS.get(label, "#6C757D")
+        if run_length > 1:
+            ratio = run_position / max(run_length - 1, 1)
+            fill_color = _mix_hex(
+                _lighten_hex(base_color, 0.24),
+                _darken_hex(base_color, 0.12),
+                ratio,
+            )
+        else:
+            fill_color = _lighten_hex(base_color, 0.18)
+        border_color = _darken_hex(base_color, 0.32)
         start_x = 0 if duration == 0 else (start / duration) * width
         region_width = 0 if duration == 0 else max(((end - start) / duration) * width, 2)
         region_rects.append(
             f'<rect x="{start_x:.2f}" y="18" width="{region_width:.2f}" height="{height - 36}" '
-            f'rx="14" ry="14" fill="{color}" opacity="0.24"></rect>'
+            f'rx="14" ry="14" fill="{fill_color}" opacity="0.34" stroke="{border_color}" stroke-width="2"></rect>'
+        )
+        legend_items.append(
+            f"<span class='edm98-legend-chip'><span class='edm98-legend-swatch' "
+            f"style='background:{base_color}; border-color:{border_color}'></span>"
+            f"{label.replace('_', ' ').title()}</span>"
         )
 
     bars = []
@@ -90,7 +170,7 @@ def _build_waveform_svg(audio_path: Path, prediction: list[dict[str, float | str
         y = center_y - bar_height / 2
         bars.append(
             f'<rect x="{x:.2f}" y="{y:.2f}" width="{bar_width:.2f}" height="{bar_height:.2f}" '
-            f'rx="{bar_width / 2:.2f}" ry="{bar_width / 2:.2f}" fill="#0f172a" opacity="0.88"></rect>'
+            f'rx="{bar_width / 2:.2f}" ry="{bar_width / 2:.2f}" fill="#0f172a" opacity="0.9"></rect>'
         )
 
     svg = (
@@ -101,7 +181,8 @@ def _build_waveform_svg(audio_path: Path, prediction: list[dict[str, float | str
         f'{"".join(bars)}'
         "</svg>"
     )
-    return svg, duration
+    legend_html = "".join(dict.fromkeys(legend_items))
+    return svg, duration, legend_html
 
 
 def _player_head() -> str:
@@ -172,7 +253,7 @@ if (!window.edm98PlayerScannerStarted) {
 
 def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | str]]) -> str:
     audio_data_url = _build_audio_data_url(audio_path)
-    waveform_svg, duration = _build_waveform_svg(audio_path, prediction)
+    waveform_svg, duration, legend_html = _build_waveform_svg(audio_path, prediction)
     html_id = f"waveform-{abs(hash((audio_path.name, tuple((row['label'], row['start'], row['end']) for row in prediction))))}"
 
     return f"""
@@ -185,6 +266,7 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     <div class="edm98-waveform-svg">{waveform_svg}</div>
     <div class="edm98-playhead" data-role="playhead"></div>
   </div>
+  <div class="edm98-legend">{legend_html}</div>
   <audio preload="metadata" src="{audio_data_url}"></audio>
 </div>
 <style>
@@ -202,15 +284,16 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
   }}
   .edm98-play {{
     border: none;
     border-radius: 999px;
     background: #111827;
     color: white;
-    padding: 10px 16px;
-    font-weight: 600;
+    padding: 10px 18px;
+    font-weight: 700;
+    font-family: Helvetica, Arial, sans-serif;
     cursor: pointer;
   }}
   .edm98-waveform-stage {{
@@ -243,14 +326,41 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     transform: translateX(-1px);
   }}
   .edm98-time {{
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: Helvetica, Arial, sans-serif;
     font-size: 0.95rem;
+    font-weight: 700;
     color: #334155;
   }}
   .edm98-waveform-shell audio {{
     width: 100%;
     margin-top: 14px;
     accent-color: #111827;
+  }}
+  .edm98-legend {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+  }}
+  .edm98-legend-chip {{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.82);
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    color: #0f172a;
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+  }}
+  .edm98-legend-swatch {{
+    width: 12px;
+    height: 12px;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    display: inline-block;
   }}
 </style>
 """
@@ -304,8 +414,20 @@ def build_demo(
         audio_path = Path(audio_file)
         prediction = pipeline.predict_file(audio_path)
         return (
-            _format_segments(prediction),
             _build_waveform_html(audio_path, prediction),
+            _build_segment_table_html(prediction),
+            gr.update(visible=False),
+            gr.update(visible=False),
+            gr.update(visible=True),
+        )
+
+    def reset_demo():
+        return (
+            "",
+            "",
+            gr.update(value=None, visible=True),
+            gr.update(visible=True),
+            gr.update(visible=False),
         )
 
     description = (
@@ -319,32 +441,122 @@ def build_demo(
         title="EDM-98 Demo",
         head=_player_head(),
         css="""
-        .gradio-container {max-width: min(1600px, 98vw) !important;}
-        .edm98-results {width: 100%;}
-        .edm98-table .wrap.svelte-1ipelgc {font-size: 0.95rem;}
+        .gradio-container {
+          max-width: min(1480px, 96vw) !important;
+          font-family: Helvetica, Arial, sans-serif !important;
+        }
+        h1, h2, h3 {font-family: Helvetica, Arial, sans-serif !important; font-weight: 800 !important;}
+        .edm98-page {
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+          align-items: center;
+        }
+        .edm98-intro {
+          width: 100%;
+          text-align: center;
+          margin: 0 auto;
+        }
+        .edm98-upload-card, .edm98-results-card {
+          width: 100%;
+          border-radius: 24px;
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          background: linear-gradient(180deg, rgba(20,24,31,0.96) 0%, rgba(11,15,20,0.98) 100%);
+          padding: 18px;
+          box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
+        }
+        .edm98-results-card {
+          background: transparent;
+          border: none;
+          padding: 0;
+          box-shadow: none;
+        }
+        .edm98-results {
+          width: 100%;
+        }
+        .edm98-run-row, .edm98-reset-row {
+          display: flex;
+          justify-content: center;
+        }
+        .edm98-table-card {
+          margin-top: 18px;
+          width: 100%;
+          border-radius: 22px;
+          overflow: hidden;
+          background: linear-gradient(180deg, rgba(15, 23, 42, 0.96) 0%, rgba(17, 24, 39, 0.98) 100%);
+          border: 1px solid rgba(148, 163, 184, 0.18);
+        }
+        .edm98-table-title {
+          padding: 16px 20px 10px;
+          font-size: 1rem;
+          font-weight: 800;
+          font-family: Helvetica, Arial, sans-serif;
+          color: #f8fafc;
+        }
+        .edm98-table-shell {
+          overflow: hidden;
+          border-top: 1px solid rgba(148, 163, 184, 0.14);
+        }
+        .edm98-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-family: Helvetica, Arial, sans-serif;
+        }
+        .edm98-table thead th {
+          text-align: left;
+          padding: 14px 18px;
+          font-size: 0.9rem;
+          font-weight: 800;
+          color: #cbd5e1;
+          background: rgba(15, 23, 42, 0.6);
+        }
+        .edm98-table tbody td {
+          padding: 14px 18px;
+          color: #f8fafc;
+          border-top: 1px solid rgba(148, 163, 184, 0.1);
+          font-size: 0.96rem;
+        }
+        .edm98-table tbody td span {
+          color: #94a3b8;
+          font-weight: 600;
+        }
+        .edm98-table tbody tr:nth-child(odd) td {
+          background: rgba(30, 41, 59, 0.22);
+        }
+        .edm98-table tbody tr:nth-child(even) td {
+          background: rgba(15, 23, 42, 0.12);
+        }
         """,
     ) as demo:
-        gr.Markdown("# EDM-98 Inference Demo")
-        gr.Markdown(description)
-        audio_input = gr.Audio(
-            sources=["upload"],
-            type="filepath",
-            label="Audio File",
-        )
-        run_button = gr.Button("Run Inference", variant="primary")
-        waveform_output = gr.HTML(elem_classes=["edm98-results"])
-        segment_table = gr.Dataframe(
-            headers=["Label", "Start", "End", "Duration"],
-            datatype=["str", "str", "str", "str"],
-            interactive=False,
-            label="Predicted Segments",
-            elem_classes=["edm98-table"],
-        )
+        with gr.Column(elem_classes=["edm98-page"]):
+            with gr.Column(elem_classes=["edm98-intro"]):
+                gr.Markdown("# EDM-98 Inference Demo")
+                gr.Markdown(description)
+
+            with gr.Column(elem_classes=["edm98-upload-card"]):
+                audio_input = gr.Audio(
+                    sources=["upload"],
+                    type="filepath",
+                    label="Audio File",
+                )
+                with gr.Row(elem_classes=["edm98-run-row"]):
+                    run_button = gr.Button("Run Inference", variant="primary")
+
+            with gr.Column(elem_classes=["edm98-results-card"]):
+                waveform_output = gr.HTML(elem_classes=["edm98-results"])
+                segment_table = gr.HTML()
+                with gr.Row(elem_classes=["edm98-reset-row"]):
+                    reset_button = gr.Button("Choose Another Audio", visible=False)
 
         run_button.click(
             fn=run_inference,
             inputs=[audio_input],
-            outputs=[segment_table, waveform_output],
+            outputs=[waveform_output, segment_table, audio_input, run_button, reset_button],
+        )
+        reset_button.click(
+            fn=reset_demo,
+            inputs=[],
+            outputs=[waveform_output, segment_table, audio_input, run_button, reset_button],
         )
 
     return demo
@@ -376,7 +588,11 @@ def launch_demo(
         offline=offline,
         no_cache=no_cache,
     )
-    return demo.launch(server_name=server_name, server_port=server_port, share=share)
+    return demo.launch(
+        server_name=server_name,
+        server_port=server_port,
+        share=share,
+    )
 
 
 if __name__ == "__main__":
