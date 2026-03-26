@@ -399,8 +399,17 @@ class InferencePipeline:
             gc.collect()
         return wrapped_30s, musicfm_embd_420s
 
-    def predict_file(self, audio_path: str | Path) -> list[dict[str, float | str]]:
+    def predict_file(
+        self,
+        audio_path: str | Path,
+        progress_callback=None,
+    ) -> list[dict[str, float | str]]:
+        def report(progress: float, desc: str):
+            if progress_callback is not None:
+                progress_callback(progress, desc=desc)
+
         LOGGER.info("Running prediction for %s", audio_path)
+        report(0.05, "Loading audio")
         librosa = _load_audio_backend()
         wav, _sr = librosa.load(audio_path, sr=INPUT_SAMPLING_RATE)
         audio = torch.tensor(wav).to(self.device)
@@ -420,6 +429,7 @@ class InferencePipeline:
 
         lens = 0
         i = 0
+        num_chunks = max(1, math.ceil(audio.shape[0] / (INPUT_SAMPLING_RATE * TIME_DUR)))
 
         with torch.no_grad():
             while True:
@@ -430,8 +440,15 @@ class InferencePipeline:
                 if end_idx - start_idx <= 1024:
                     break
 
+                chunk_idx = i // TIME_DUR
+                base_progress = 0.12 + (0.76 * (chunk_idx / num_chunks))
                 LOGGER.debug("Processing segment starting at %.2fs", i)
+                report(base_progress, f"Extracting MuQ embeddings ({chunk_idx + 1}/{num_chunks})")
                 wrapped_muq_embd_30s, muq_embd_420s = self._extract_muq_block(audio, i)
+                report(
+                    min(base_progress + 0.22 / num_chunks, 0.88),
+                    f"Extracting MusicFM embeddings ({chunk_idx + 1}/{num_chunks})",
+                )
                 wrapped_musicfm_embd_30s, musicfm_embd_420s = self._extract_musicfm_block(audio, i)
 
                 all_embds = [
@@ -455,6 +472,10 @@ class InferencePipeline:
                 del wrapped_muq_embd_30s, muq_embd_420s, wrapped_musicfm_embd_30s, musicfm_embd_420s, all_embds
                 gc.collect()
 
+                report(
+                    min(base_progress + 0.45 / num_chunks, 0.92),
+                    f"Running EDMFormer ({chunk_idx + 1}/{num_chunks})",
+                )
                 _msa_info, chunk_logits = self.model.infer(
                     input_embeddings=embd,
                     dataset_ids=self.dataset_ids,
@@ -481,6 +502,7 @@ class InferencePipeline:
                 gc.collect()
                 i += TIME_DUR
 
+        report(0.94, "Postprocessing segments")
         logits["function_logits"] /= logits_num["function_logits"]
         logits["boundary_logits"] /= logits_num["boundary_logits"]
 
@@ -493,6 +515,7 @@ class InferencePipeline:
         if self.apply_rule_postprocessing:
             msa_infer_output = rule_post_processing(msa_infer_output)
         LOGGER.info("Prediction completed with %d segments", len(msa_infer_output) - 1)
+        report(1.0, "Done")
 
         output = []
         for idx in range(len(msa_infer_output) - 1):

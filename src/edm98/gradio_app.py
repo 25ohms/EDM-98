@@ -133,7 +133,6 @@ def _build_waveform_svg(audio_path: Path, prediction: list[dict[str, float | str
         idx = jdx
 
     region_rects = []
-    region_labels = []
     legend_items = []
     for segment, run_length, run_position in zip(prediction, run_lengths, run_positions):
         start = float(segment["start"])
@@ -156,16 +155,6 @@ def _build_waveform_svg(audio_path: Path, prediction: list[dict[str, float | str
             f'<rect x="{start_x:.2f}" y="18" width="{region_width:.2f}" height="{height - 36}" '
             f'rx="14" ry="14" fill="{fill_color}" opacity="0.34" stroke="{border_color}" stroke-width="2"></rect>'
         )
-        if region_width >= 70:
-            label_x = start_x + (region_width / 2)
-            label_y = 48
-            label_text = label.replace("_", " ").title()
-            text_color = _darken_hex(base_color, 0.52)
-            region_labels.append(
-                f'<text x="{label_x:.2f}" y="{label_y:.2f}" text-anchor="middle" '
-                f'font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="700" '
-                f'fill="{text_color}" opacity="0.95">{label_text}</text>'
-            )
         legend_items.append(
             f"<span class='edm98-legend-chip'><span class='edm98-legend-swatch' "
             f"style='background:{base_color}; border-color:{border_color}'></span>"
@@ -189,7 +178,6 @@ def _build_waveform_svg(audio_path: Path, prediction: list[dict[str, float | str
         f'xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
         f'<rect x="0" y="0" width="{width}" height="{height}" rx="18" ry="18" fill="#f8fbff"></rect>'
         f'{"".join(region_rects)}'
-        f'{"".join(region_labels)}'
         f'{"".join(bars)}'
         "</svg>"
     )
@@ -362,10 +350,10 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     border-radius: 999px;
     background: rgba(255,255,255,0.96);
     border: 1px solid rgba(100, 116, 139, 0.26);
-    color: #0f172a;
+    color: #111827;
     font-family: Helvetica, Arial, sans-serif;
     font-size: 0.92rem;
-    font-weight: 700;
+    font-weight: 800;
   }}
   .edm98-legend-swatch {{
     width: 12px;
@@ -419,12 +407,20 @@ def build_demo(
 
     pipeline = create_pipeline(**pipeline_kwargs)
 
-    def run_inference(audio_file):
+    def show_loading():
+        return (
+            gr.update(value="Running inference...", visible=True),
+            gr.update(visible=False),
+            gr.update(visible=False),
+            gr.update(visible=False),
+        )
+
+    def run_inference(audio_file, progress=gr.Progress(track_tqdm=False)):
         if not audio_file:
             raise gr.Error("Upload an audio file before running inference.")
 
         audio_path = Path(audio_file)
-        prediction = pipeline.predict_file(audio_path)
+        prediction = pipeline.predict_file(audio_path, progress_callback=progress)
         return (
             _build_waveform_html(audio_path, prediction),
             _build_segment_table_html(prediction),
@@ -611,10 +607,15 @@ def build_demo(
                     reset_button = gr.Button("Choose Another Audio")
 
         run_button.click(
+            fn=show_loading,
+            inputs=[],
+            outputs=[status_text, waveform_output, segment_table, results_panel],
+            show_progress="hidden",
+        ).then(
             fn=run_inference,
             inputs=[audio_input],
             outputs=[waveform_output, segment_table, status_text, upload_panel, results_panel, reset_button],
-            show_progress="hidden",
+            show_progress="full",
         )
         reset_button.click(
             fn=reset_demo,
