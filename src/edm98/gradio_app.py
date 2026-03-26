@@ -199,6 +199,9 @@ window.edm98InitPlayer = function (id) {
   const playhead = root.querySelector("[data-role='playhead']");
   const current = root.querySelector("[data-role='current']");
   const total = root.querySelector("[data-role='total']");
+  const playIcon = "<span aria-hidden='true'>▶</span>";
+  const pauseIcon = "<span aria-hidden='true'>⏸</span>";
+  let isScrubbing = false;
 
   if (!audio || !button || !stage || !playhead || !current || !total) return;
 
@@ -218,6 +221,23 @@ window.edm98InitPlayer = function (id) {
     playhead.style.left = `${ratio * 100}%`;
   };
 
+  const seekFromClientX = (clientX) => {
+    const rect = stage.getBoundingClientRect();
+    const ratio = rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
+    const clamped = Math.min(Math.max(ratio, 0), 1);
+    if (audio.duration) {
+      audio.currentTime = clamped * audio.duration;
+      sync();
+    }
+  };
+
+  const startScrub = (event) => {
+    isScrubbing = true;
+    stage.classList.add("is-scrubbing");
+    seekFromClientX(event.clientX);
+    event.preventDefault();
+  };
+
   button.addEventListener("click", () => {
     if (audio.paused) {
       audio.play();
@@ -227,21 +247,35 @@ window.edm98InitPlayer = function (id) {
   });
 
   stage.addEventListener("click", (event) => {
-    const rect = stage.getBoundingClientRect();
-    const ratio = rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0;
-    const clamped = Math.min(Math.max(ratio, 0), 1);
-    if (audio.duration) {
-      audio.currentTime = clamped * audio.duration;
-      sync();
-    }
+    if (isScrubbing) return;
+    seekFromClientX(event.clientX);
+  });
+
+  stage.addEventListener("pointerdown", startScrub);
+  playhead.addEventListener("pointerdown", startScrub);
+  window.addEventListener("pointermove", (event) => {
+    if (!isScrubbing) return;
+    seekFromClientX(event.clientX);
+  });
+  window.addEventListener("pointerup", () => {
+    if (!isScrubbing) return;
+    isScrubbing = false;
+    stage.classList.remove("is-scrubbing");
+  });
+  window.addEventListener("pointercancel", () => {
+    if (!isScrubbing) return;
+    isScrubbing = false;
+    stage.classList.remove("is-scrubbing");
   });
 
   audio.addEventListener("loadedmetadata", sync);
   audio.addEventListener("timeupdate", sync);
-  audio.addEventListener("pause", () => { button.textContent = "Play"; sync(); });
-  audio.addEventListener("play", () => { button.textContent = "Pause"; sync(); });
-  audio.addEventListener("ended", () => { button.textContent = "Play"; sync(); });
+  audio.addEventListener("pause", () => { button.innerHTML = playIcon; button.setAttribute("aria-label", "Play"); sync(); });
+  audio.addEventListener("play", () => { button.innerHTML = pauseIcon; button.setAttribute("aria-label", "Pause"); sync(); });
+  audio.addEventListener("ended", () => { button.innerHTML = playIcon; button.setAttribute("aria-label", "Play"); sync(); });
 
+  button.innerHTML = playIcon;
+  button.setAttribute("aria-label", "Play");
   sync();
   window.edm98Players[id] = true;
 };
@@ -270,7 +304,7 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     return f"""
 <div id="{html_id}" class="edm98-waveform-shell" data-player-id="{html_id}">
   <div class="edm98-toolbar">
-    <button data-role="toggle" class="edm98-play">Play</button>
+    <button data-role="toggle" class="edm98-play" type="button" title="Play or pause audio" aria-label="Play"><span aria-hidden="true">▶</span></button>
     <div class="edm98-time"><span data-role="current">0:00</span> / <span data-role="total">{_format_clock(duration)}</span></div>
   </div>
   <div class="edm98-waveform-stage" data-role="stage">
@@ -298,14 +332,20 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     margin-bottom: 14px;
   }}
   .edm98-play {{
+    width: 48px;
+    height: 48px;
     border: none;
     border-radius: 999px;
     background: #111827;
     color: white;
-    padding: 10px 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     font-weight: 700;
+    font-size: 1.15rem;
     font-family: Helvetica, Arial, sans-serif;
     cursor: pointer;
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.22);
   }}
   .edm98-waveform-stage {{
     position: relative;
@@ -316,6 +356,10 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.18);
     background: linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(239,245,252,0.96) 100%);
     cursor: pointer;
+    touch-action: none;
+  }}
+  .edm98-waveform-stage.is-scrubbing {{
+    cursor: ew-resize;
   }}
   .edm98-waveform-svg {{
     width: 100%;
@@ -331,11 +375,13 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     top: 12px;
     bottom: 12px;
     left: 0%;
-    width: 2px;
+    width: 14px;
     background: linear-gradient(180deg, #ef4444 0%, #f97316 100%);
     box-shadow: 0 0 0 1px rgba(255,255,255,0.32);
-    pointer-events: none;
-    transform: translateX(-1px);
+    pointer-events: auto;
+    transform: translateX(-7px);
+    border-radius: 999px;
+    cursor: ew-resize;
   }}
   .edm98-time {{
     font-family: Helvetica, Arial, sans-serif;
@@ -362,7 +408,7 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     border-radius: 999px;
     background: #ffffff;
     border: 1px solid rgba(71, 85, 105, 0.34);
-    color: #020617;
+    color: #01050d;
     font-family: Helvetica, Arial, sans-serif;
     font-size: 0.92rem;
     font-weight: 800;
@@ -429,7 +475,7 @@ def build_demo(
         return (
             _build_waveform_html(audio_path, prediction),
             _build_segment_table_html(prediction),
-            gr.update(value="", visible=False),
+            gr.update(value="Inference complete.", visible=False),
             gr.update(visible=False),
             gr.update(visible=True),
             gr.update(visible=True),
@@ -439,7 +485,7 @@ def build_demo(
         return (
             "",
             "",
-            gr.update(value="", visible=False),
+            gr.update(value="Waiting for audio input.", visible=True),
             gr.update(visible=True),
             gr.update(visible=False),
             gr.update(visible=False),
@@ -601,7 +647,11 @@ def build_demo(
                     type="filepath",
                     label="Audio File",
                 )
-                status_text = gr.Markdown("", visible=False, elem_classes=["edm98-status"])
+                status_text = gr.Markdown(
+                    "Waiting for audio input.",
+                    visible=True,
+                    elem_classes=["edm98-status"],
+                )
                 with gr.Row(elem_classes=["edm98-run-row"]):
                     run_button = gr.Button("Run Inference", variant="primary")
 
@@ -616,6 +666,7 @@ def build_demo(
             inputs=[audio_input],
             outputs=[waveform_output, segment_table, status_text, upload_panel, results_panel, reset_button],
             show_progress="full",
+            show_progress_on=[upload_panel, status_text],
         )
         reset_button.click(
             fn=reset_demo,
