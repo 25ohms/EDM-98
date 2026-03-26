@@ -93,7 +93,7 @@ The demo currently provides:
 - a moving playback cursor
 - a tabular view of predicted sections with minute-second timestamps
 
-For local or Vertex AI Workbench use:
+To launch the demo:
 
 ```bash
 ./scripts/install_inference_deps.sh
@@ -102,7 +102,7 @@ export PYTHONPATH="$PWD/src:$PWD/third_party:$PYTHONPATH"
 python -m edm98.cli demo --device cuda --low-memory --server-name 0.0.0.0 --server-port 7860
 ```
 
-If you are tunneling from a remote VM, forward the port and open the forwarded local URL in your browser.
+If you are running on a remote machine, expose or forward the chosen port and open the forwarded local URL in your browser.
 
 ## Python API
 

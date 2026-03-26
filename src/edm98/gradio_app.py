@@ -417,7 +417,7 @@ def build_demo(
             _build_waveform_html(audio_path, prediction),
             _build_segment_table_html(prediction),
             gr.update(visible=False),
-            gr.update(visible=False),
+            gr.update(visible=True),
             gr.update(visible=True),
         )
 
@@ -425,8 +425,8 @@ def build_demo(
         return (
             "",
             "",
-            gr.update(value=None, visible=True),
             gr.update(visible=True),
+            gr.update(visible=False),
             gr.update(visible=False),
         )
 
@@ -441,11 +441,48 @@ def build_demo(
         title="EDM-98 Demo",
         head=_player_head(),
         css="""
-        .gradio-container {
-          max-width: min(1480px, 96vw) !important;
-          font-family: Helvetica, Arial, sans-serif !important;
+        :root {
+          color-scheme: light dark;
+          --edm-bg: #0f1115;
+          --edm-fg: #f5f7fb;
+          --edm-muted: #cbd5e1;
+          --edm-card-bg: rgba(17, 24, 39, 0.92);
+          --edm-card-border: rgba(148, 163, 184, 0.18);
+          --edm-table-bg: rgba(15, 23, 42, 0.96);
+          --edm-table-head: rgba(15, 23, 42, 0.7);
+          --edm-table-row-a: rgba(30, 41, 59, 0.24);
+          --edm-table-row-b: rgba(15, 23, 42, 0.16);
         }
-        h1, h2, h3 {font-family: Helvetica, Arial, sans-serif !important; font-weight: 800 !important;}
+        @media (prefers-color-scheme: light) {
+          :root {
+            --edm-bg: #f3f6fb;
+            --edm-fg: #0f172a;
+            --edm-muted: #475569;
+            --edm-card-bg: rgba(255, 255, 255, 0.88);
+            --edm-card-border: rgba(148, 163, 184, 0.24);
+            --edm-table-bg: rgba(255, 255, 255, 0.92);
+            --edm-table-head: rgba(241, 245, 249, 0.96);
+            --edm-table-row-a: rgba(248, 250, 252, 0.98);
+            --edm-table-row-b: rgba(241, 245, 249, 0.92);
+          }
+        }
+        .gradio-container {
+          max-width: min(1440px, 96vw) !important;
+          font-family: Helvetica, Arial, sans-serif !important;
+          margin: 0 auto !important;
+        }
+        .gradio-container, body {
+          background: var(--edm-bg) !important;
+          color: var(--edm-fg) !important;
+        }
+        h1, h2, h3 {
+          font-family: Helvetica, Arial, sans-serif !important;
+          font-weight: 800 !important;
+          color: var(--edm-fg) !important;
+        }
+        p, .prose, .gr-markdown, .gr-markdown p {
+          color: var(--edm-muted) !important;
+        }
         .edm98-page {
           display: flex;
           flex-direction: column;
@@ -460,16 +497,24 @@ def build_demo(
         .edm98-upload-card, .edm98-results-card {
           width: 100%;
           border-radius: 24px;
-          border: 1px solid rgba(148, 163, 184, 0.18);
-          background: linear-gradient(180deg, rgba(20,24,31,0.96) 0%, rgba(11,15,20,0.98) 100%);
+          border: 1px solid var(--edm-card-border);
+          background: var(--edm-card-bg);
           padding: 18px;
           box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
+          box-sizing: border-box;
         }
         .edm98-results-card {
           background: transparent;
           border: none;
           padding: 0;
           box-shadow: none;
+        }
+        .edm98-results-grid {
+          width: 100%;
+          display: grid;
+          grid-template-columns: minmax(0, 1.65fr) minmax(360px, 0.95fr);
+          gap: 18px;
+          align-items: start;
         }
         .edm98-results {
           width: 100%;
@@ -478,20 +523,21 @@ def build_demo(
           display: flex;
           justify-content: center;
         }
+        .edm98-reset-row { margin-top: 10px; }
         .edm98-table-card {
-          margin-top: 18px;
           width: 100%;
           border-radius: 22px;
           overflow: hidden;
-          background: linear-gradient(180deg, rgba(15, 23, 42, 0.96) 0%, rgba(17, 24, 39, 0.98) 100%);
-          border: 1px solid rgba(148, 163, 184, 0.18);
+          background: var(--edm-table-bg);
+          border: 1px solid var(--edm-card-border);
+          box-sizing: border-box;
         }
         .edm98-table-title {
           padding: 16px 20px 10px;
           font-size: 1rem;
           font-weight: 800;
           font-family: Helvetica, Arial, sans-serif;
-          color: #f8fafc;
+          color: var(--edm-fg);
         }
         .edm98-table-shell {
           overflow: hidden;
@@ -507,24 +553,29 @@ def build_demo(
           padding: 14px 18px;
           font-size: 0.9rem;
           font-weight: 800;
-          color: #cbd5e1;
-          background: rgba(15, 23, 42, 0.6);
+          color: var(--edm-muted);
+          background: var(--edm-table-head);
         }
         .edm98-table tbody td {
           padding: 14px 18px;
-          color: #f8fafc;
+          color: var(--edm-fg);
           border-top: 1px solid rgba(148, 163, 184, 0.1);
           font-size: 0.96rem;
         }
         .edm98-table tbody td span {
-          color: #94a3b8;
+          color: var(--edm-muted);
           font-weight: 600;
         }
         .edm98-table tbody tr:nth-child(odd) td {
-          background: rgba(30, 41, 59, 0.22);
+          background: var(--edm-table-row-a);
         }
         .edm98-table tbody tr:nth-child(even) td {
-          background: rgba(15, 23, 42, 0.12);
+          background: var(--edm-table-row-b);
+        }
+        @media (max-width: 1100px) {
+          .edm98-results-grid {
+            grid-template-columns: 1fr;
+          }
         }
         """,
     ) as demo:
@@ -533,7 +584,7 @@ def build_demo(
                 gr.Markdown("# EDM-98 Inference Demo")
                 gr.Markdown(description)
 
-            with gr.Column(elem_classes=["edm98-upload-card"]):
+            with gr.Column(elem_classes=["edm98-upload-card"], visible=True) as upload_panel:
                 audio_input = gr.Audio(
                     sources=["upload"],
                     type="filepath",
@@ -542,21 +593,22 @@ def build_demo(
                 with gr.Row(elem_classes=["edm98-run-row"]):
                     run_button = gr.Button("Run Inference", variant="primary")
 
-            with gr.Column(elem_classes=["edm98-results-card"]):
-                waveform_output = gr.HTML(elem_classes=["edm98-results"])
-                segment_table = gr.HTML()
+            with gr.Column(elem_classes=["edm98-results-card"], visible=False) as results_panel:
+                with gr.Row(elem_classes=["edm98-results-grid"]):
+                    waveform_output = gr.HTML(elem_classes=["edm98-results"])
+                    segment_table = gr.HTML()
                 with gr.Row(elem_classes=["edm98-reset-row"]):
-                    reset_button = gr.Button("Choose Another Audio", visible=False)
+                    reset_button = gr.Button("Choose Another Audio")
 
         run_button.click(
             fn=run_inference,
             inputs=[audio_input],
-            outputs=[waveform_output, segment_table, audio_input, run_button, reset_button],
+            outputs=[waveform_output, segment_table, upload_panel, results_panel, reset_button],
         )
         reset_button.click(
             fn=reset_demo,
             inputs=[],
-            outputs=[waveform_output, segment_table, audio_input, run_button, reset_button],
+            outputs=[waveform_output, segment_table, upload_panel, results_panel, reset_button],
         )
 
     return demo
