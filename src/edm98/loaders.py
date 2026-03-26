@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .constants import (
-    DEFAULT_DATASET_PATH,
+    DEFAULT_DATASET_FILENAME,
     DEFAULT_SPLITS_DIR,
     PACKAGE_RESOURCES_PACKAGE,
     PACKAGE_SPLITS_PACKAGE,
@@ -17,10 +17,10 @@ def _coerce_path(path: str | Path) -> Path:
 
 
 def iter_dataset_records(
-    dataset_path: str | Path | None = DEFAULT_DATASET_PATH,
+    dataset_path: str | Path | None = None,
 ) -> Iterable[TrackRecord]:
-    if dataset_path is None or dataset_path == DEFAULT_DATASET_PATH:
-        resource = resources.files(PACKAGE_RESOURCES_PACKAGE).joinpath(DEFAULT_DATASET_PATH)
+    if dataset_path is None:
+        resource = resources.files(PACKAGE_RESOURCES_PACKAGE).joinpath(DEFAULT_DATASET_FILENAME)
         handle_cm = resource.open("r", encoding="utf-8")
     else:
         handle_cm = _coerce_path(dataset_path).open(encoding="utf-8")
@@ -35,7 +35,7 @@ def iter_dataset_records(
 
 
 def load_dataset_records(
-    dataset_path: str | Path | None = DEFAULT_DATASET_PATH,
+    dataset_path: str | Path | None = None,
 ) -> list[TrackRecord]:
     records = list(iter_dataset_records(dataset_path))
     validate_dataset_records(records)
@@ -77,7 +77,7 @@ def load_all_splits(
 
 def load_records_by_split(
     split_name: str,
-    dataset_path: str | Path | None = DEFAULT_DATASET_PATH,
+    dataset_path: str | Path | None = None,
     splits_dir: str | Path | None = DEFAULT_SPLITS_DIR,
 ) -> list[TrackRecord]:
     records = load_dataset_records(dataset_path)
