@@ -21,8 +21,8 @@ fi
 echo
 echo "MusicFM source checked out at: ${MUSICFM_DIR}"
 echo "Local Hugging Face cache directory: ${HF_CACHE_DIR}"
-echo "Add this to PYTHONPATH when running inference:"
-echo "  ${THIRD_PARTY_DIR}"
+echo "Set MUSICFMPATH when running inference:"
+echo "  export MUSICFMPATH=\"${MUSICFM_DIR}\""
 echo
 echo "Optional: prewarm MuQ and MusicFM cache assets once with:"
 echo "  python -m edm98.cli warm-cache"

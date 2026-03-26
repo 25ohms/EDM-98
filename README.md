@@ -37,10 +37,10 @@ pip install -e .
 ```bash
 ./scripts/install_inference_deps.sh
 pip install -e ".[ui]"
-export PYTHONPATH="$PWD/src:$PWD/third_party:$PYTHONPATH"
+export MUSICFMPATH="$PWD/third_party/musicfm"
 ```
 
-`third_party/musicfm` is provisioned locally by the install script because upstream MusicFM is not published as an installable Python package.
+`third_party/musicfm` is provisioned locally by the install script because upstream MusicFM is not published as an installable Python package. Set `MUSICFMPATH` to that checkout when using the optional local inference workflow.
 
 ## Checkpoints And Cache
 
@@ -100,7 +100,7 @@ To launch the demo:
 ```bash
 ./scripts/install_inference_deps.sh
 pip install -e ".[ui]"
-export PYTHONPATH="$PWD/src:$PWD/third_party:$PYTHONPATH"
+export MUSICFMPATH="$PWD/third_party/musicfm"
 python -m edm98.cli demo --device cuda --server-name 0.0.0.0 --server-port 7860
 ```
 
@@ -137,7 +137,7 @@ Linux is the most straightforward setup for GPU-backed demo usage.
 ```bash
 ./scripts/install_inference_deps.sh
 pip install -e ".[ui]"
-export PYTHONPATH="$PWD/src:$PWD/third_party:$PYTHONPATH"
+export MUSICFMPATH="$PWD/third_party/musicfm"
 python -m edm98.cli demo --device cuda --server-name 0.0.0.0 --server-port 7860
 ```
 
@@ -150,7 +150,7 @@ On Apple Silicon, use Metal via `--device mps`.
 ```bash
 ./scripts/install_inference_deps.sh
 pip install -e ".[ui]"
-export PYTHONPATH="$PWD/src:$PWD/third_party:$PYTHONPATH"
+export MUSICFMPATH="$PWD/third_party/musicfm"
 python -m edm98.cli demo --device mps --server-name 127.0.0.1 --server-port 7860
 ```
 

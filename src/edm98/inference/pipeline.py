@@ -198,20 +198,39 @@ def _load_muq():
 
 
 def _load_musicfm():
+    musicfm_env = os.environ.get("MUSICFMPATH")
+    candidate_paths = []
+    if musicfm_env:
+        env_path = Path(musicfm_env).expanduser()
+        candidate_paths.extend(
+            [
+                env_path,
+                env_path.parent if env_path.name == "musicfm" else None,
+            ]
+        )
+    third_party_root = DEFAULT_DATA_DIR.parent / "third_party"
+    candidate_paths.extend(
+        [
+            third_party_root,
+            third_party_root / "musicfm",
+        ]
+    )
+
+    for candidate in candidate_paths:
+        if candidate is None:
+            continue
+        candidate_str = str(candidate)
+        if candidate.exists() and candidate_str not in sys.path:
+            sys.path.insert(0, candidate_str)
+
     try:
         module = importlib.import_module("musicfm.model.musicfm_25hz")
-    except ImportError:
-        third_party_root = DEFAULT_DATA_DIR.parent / "third_party"
-        if third_party_root.exists() and str(third_party_root) not in sys.path:
-            sys.path.insert(0, str(third_party_root))
-        try:
-            module = importlib.import_module("musicfm.model.musicfm_25hz")
-        except ImportError as exc:
-            raise RuntimeError(
-                "Inference requires the MusicFM source tree. "
-                "Clone https://github.com/minzwon/musicfm into third_party/musicfm "
-                "or add its parent directory to PYTHONPATH, then retry."
-            ) from exc
+    except ImportError as exc:
+        raise RuntimeError(
+            "Inference requires the MusicFM source tree. "
+            "Clone https://github.com/minzwon/musicfm and set MUSICFMPATH to either "
+            "that checkout or its parent directory, then retry."
+        ) from exc
     return module.MusicFM25Hz
 
 
