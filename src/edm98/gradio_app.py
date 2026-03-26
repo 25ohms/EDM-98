@@ -428,6 +428,7 @@ def build_demo(
         return (
             _build_waveform_html(audio_path, prediction),
             _build_segment_table_html(prediction),
+            gr.update(value="Inference complete.", visible=True),
             gr.update(visible=False),
             gr.update(visible=True),
             gr.update(visible=True),
@@ -437,6 +438,7 @@ def build_demo(
         return (
             "",
             "",
+            gr.update(value="", visible=False),
             gr.update(visible=True),
             gr.update(visible=False),
             gr.update(visible=False),
@@ -528,6 +530,14 @@ def build_demo(
           display: flex;
           justify-content: center;
         }
+        .edm98-status {
+          width: 100%;
+          text-align: center;
+          font-family: Helvetica, Arial, sans-serif;
+          font-weight: 700;
+          color: var(--edm-muted);
+          min-height: 24px;
+        }
         .edm98-reset-row { margin-top: 10px; }
         .edm98-table-card {
           width: 100%;
@@ -590,6 +600,7 @@ def build_demo(
                     type="filepath",
                     label="Audio File",
                 )
+                status_text = gr.Markdown("", visible=False, elem_classes=["edm98-status"])
                 with gr.Row(elem_classes=["edm98-run-row"]):
                     run_button = gr.Button("Run Inference", variant="primary")
 
@@ -602,13 +613,13 @@ def build_demo(
         run_button.click(
             fn=run_inference,
             inputs=[audio_input],
-            outputs=[waveform_output, segment_table, upload_panel, results_panel, reset_button],
-            show_progress="full",
+            outputs=[waveform_output, segment_table, status_text, upload_panel, results_panel, reset_button],
+            show_progress="hidden",
         )
         reset_button.click(
             fn=reset_demo,
             inputs=[],
-            outputs=[waveform_output, segment_table, upload_panel, results_panel, reset_button],
+            outputs=[waveform_output, segment_table, status_text, upload_panel, results_panel, reset_button],
             show_progress="hidden",
         )
 
