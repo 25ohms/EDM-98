@@ -375,19 +375,22 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     top: 12px;
     bottom: 12px;
     left: 0%;
-    width: 14px;
+    width: 8px;
     background: linear-gradient(180deg, #ef4444 0%, #f97316 100%);
     box-shadow: 0 0 0 1px rgba(255,255,255,0.32);
     pointer-events: auto;
-    transform: translateX(-7px);
+    transform: translateX(-4px);
     border-radius: 999px;
     cursor: ew-resize;
   }}
   .edm98-time {{
     font-family: Helvetica, Arial, sans-serif;
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #334155;
+    font-size: 1rem;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
   }}
   .edm98-waveform-shell audio {{
     width: 100%;
