@@ -241,6 +241,7 @@ class InferencePipeline:
         dataset_label: str = "EDMFormer",
         apply_rule_postprocessing: bool = True,
         low_memory: bool = False,
+        persistent_models: bool = False,
         hf_cache_dir: str | Path = DEFAULT_HF_CACHE_DIR,
         offline: bool = False,
         no_cache: bool = False,
@@ -258,13 +259,14 @@ class InferencePipeline:
         self.dataset_label = dataset_label
         self.apply_rule_postprocessing = apply_rule_postprocessing
         self.low_memory = low_memory
+        self.persistent_models = persistent_models
         LOGGER.info("Loaded config from %s", config_path)
         self.musicfm_stat_path = str(musicfm_stat_path)
         self.musicfm_model_path = str(musicfm_model_path)
         self.muq_model = None
         self.musicfm_model = None
 
-        if not self.low_memory:
+        if self.persistent_models or not self.low_memory:
             self.muq_model = self._create_muq_model()
             self.musicfm_model = self._create_musicfm_model()
 
@@ -356,7 +358,7 @@ class InferencePipeline:
                 del hidden
 
         wrapped_30s = torch.concatenate(wrapped, dim=1)
-        if self.low_memory:
+        if self.low_memory and not self.persistent_models:
             del model
             self.muq_model = None
             gc.collect()
@@ -391,7 +393,7 @@ class InferencePipeline:
                 del hidden
 
         wrapped_30s = torch.concatenate(wrapped, dim=1)
-        if self.low_memory:
+        if self.low_memory and not self.persistent_models:
             del model
             self.musicfm_model = None
             gc.collect()
@@ -536,6 +538,17 @@ def warm_model_cache(
             model_path=str(musicfm_model_path),
         )
     LOGGER.info("Inference model cache is ready")
+
+
+def create_pipeline(**kwargs) -> InferencePipeline:
+    return InferencePipeline(**kwargs)
+
+
+def predict_with_pipeline(
+    pipeline: InferencePipeline,
+    audio_path: str | Path,
+):
+    return pipeline.predict_file(audio_path)
 
 
 def predict_file(audio_path: str | Path, **kwargs):

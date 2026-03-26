@@ -192,31 +192,34 @@ def build_demo(
             "Gradio is required for the demo. Install optional UI dependencies first."
         ) from exc
 
-    def run_inference(audio_file):
-        from .inference import predict_file
+    from .inference import create_pipeline
 
+    pipeline_kwargs = {
+        "device": device,
+        "low_memory": low_memory,
+        "persistent_models": True,
+        "offline": offline,
+        "no_cache": no_cache,
+    }
+    if checkpoint_path is not None:
+        pipeline_kwargs["checkpoint_path"] = checkpoint_path
+    if config_path is not None:
+        pipeline_kwargs["config_path"] = config_path
+    if musicfm_stat_path is not None:
+        pipeline_kwargs["musicfm_stat_path"] = musicfm_stat_path
+    if musicfm_model_path is not None:
+        pipeline_kwargs["musicfm_model_path"] = musicfm_model_path
+    if hf_cache_dir is not None:
+        pipeline_kwargs["hf_cache_dir"] = hf_cache_dir
+
+    pipeline = create_pipeline(**pipeline_kwargs)
+
+    def run_inference(audio_file):
         if not audio_file:
             raise gr.Error("Upload an audio file before running inference.")
 
         audio_path = Path(audio_file)
-        kwargs = {
-            "device": device,
-            "low_memory": low_memory,
-            "offline": offline,
-            "no_cache": no_cache,
-        }
-        if checkpoint_path is not None:
-            kwargs["checkpoint_path"] = checkpoint_path
-        if config_path is not None:
-            kwargs["config_path"] = config_path
-        if musicfm_stat_path is not None:
-            kwargs["musicfm_stat_path"] = musicfm_stat_path
-        if musicfm_model_path is not None:
-            kwargs["musicfm_model_path"] = musicfm_model_path
-        if hf_cache_dir is not None:
-            kwargs["hf_cache_dir"] = hf_cache_dir
-
-        prediction = predict_file(audio_path, **kwargs)
+        prediction = pipeline.predict_file(audio_path)
         return (
             _format_segments(prediction),
             json.dumps(prediction, indent=2),
@@ -226,7 +229,8 @@ def build_demo(
     description = (
         "Upload an audio file, run EDMFormer inference, and inspect the predicted "
         "EDM-98 segment timeline. The waveform view is color-coded by section and "
-        "includes a moving playhead during playback."
+        "includes a moving playhead during playback. The inference pipeline is "
+        "preloaded when the app starts and remains live until the process exits."
     )
 
     with gr.Blocks(title="EDM-98 Demo") as demo:
