@@ -406,13 +406,19 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     gap: 8px;
     padding: 8px 12px;
     border-radius: 999px;
-    background: #ffffff;
-    border: 1px solid rgba(71, 85, 105, 0.34);
-    color: #01050d;
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid rgba(30, 41, 59, 0.26);
+    color: #0f172a !important;
     font-family: Helvetica, Arial, sans-serif;
-    font-size: 0.92rem;
-    font-weight: 800;
+    font-size: 0.96rem;
+    font-weight: 900;
+    letter-spacing: 0.01em;
     box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  }}
+  .edm98-legend-chip,
+  .edm98-legend-chip span,
+  .edm98-legend-chip strong {{
+    color: #0f172a !important;
   }}
   .edm98-legend-swatch {{
     width: 12px;
