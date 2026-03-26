@@ -90,7 +90,7 @@ This assumes you have already acquired the audio separately. `edm98` provides th
 
 `edm98` is primarily a dataset package, but the packaged labels and split files can also be used as the canonical dataset-side inputs for EDMFormer-style training.
 
-The repository includes a simple notebook at [notebooks/edm98_training_prep.ipynb](/Users/sahal/Desktop/ohms/code/WATAI/EDM-98/notebooks/edm98_training_prep.ipynb) that shows:
+The repository includes a simple notebook at `notebooks/edm98_training_prep.ipynb` that shows:
 
 - how to load the packaged metadata and split IDs
 - how to map dataset records back to externally downloaded audio
@@ -139,18 +139,20 @@ That resolved list is the starting point for a preprocessing step that generates
 ### Dataset-only
 
 ```bash
-pip install -e .
+pip install edm98
 ```
 
 ### Inference
 
 ```bash
+git clone https://github.com/25ohms/EDM-98.git
+cd EDM-98
 ./scripts/install_inference_deps.sh
 pip install -e ".[ui]"
 export MUSICFMPATH="$PWD/third_party/musicfm"
 ```
 
-`third_party/musicfm` is provisioned locally by the install script because upstream MusicFM is not published as an installable Python package. Set `MUSICFMPATH` to that checkout when using the optional local inference workflow.
+`third_party/musicfm` is provisioned locally by the install script because upstream MusicFM is not published as an installable Python package. The same script also installs MuQ from its upstream source repository. Set `MUSICFMPATH` to that checkout when using the optional local inference workflow.
 
 ## Checkpoints And Cache
 

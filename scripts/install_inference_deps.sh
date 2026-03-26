@@ -11,6 +11,7 @@ cd "${REPO_ROOT}"
 
 python -m pip install --upgrade pip setuptools wheel
 python -m pip install -e ".[inference]"
+python -m pip install "muq @ git+https://github.com/tencent-ailab/MuQ.git"
 
 mkdir -p "${THIRD_PARTY_DIR}"
 mkdir -p "${HF_CACHE_DIR}"
