@@ -314,14 +314,14 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
 <div id="{html_id}" class="edm98-waveform-shell" data-player-id="{html_id}">
   <div class="edm98-toolbar">
     <button data-role="toggle" class="edm98-play" type="button" title="Play or pause audio" aria-label="Play"><span aria-hidden="true">▶</span></button>
-  </div>
-  <div class="edm98-waveform-stage" data-role="stage">
-    <div class="edm98-waveform-svg">{waveform_svg}</div>
     <div class="edm98-time" data-role="time-display">
       <span data-role="current">0:00 ({_format_seconds(0)})</span>
       <span class="edm98-time-separator">/</span>
       <span data-role="total">{_format_clock(duration)} ({_format_seconds(duration)})</span>
     </div>
+  </div>
+  <div class="edm98-waveform-stage" data-role="stage">
+    <div class="edm98-waveform-svg">{waveform_svg}</div>
     <div class="edm98-playhead" data-role="playhead"></div>
   </div>
   <div class="edm98-legend">{legend_html}</div>
@@ -397,14 +397,10 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     cursor: ew-resize;
   }}
   .edm98-time {{
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    z-index: 3;
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px;
+    padding: 8px 14px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.96);
     border: 1px solid rgba(30, 41, 59, 0.16);
@@ -412,10 +408,14 @@ def _build_waveform_html(audio_path: Path, prediction: list[dict[str, float | st
     font-family: Helvetica, Arial, sans-serif;
     font-size: 0.98rem;
     font-weight: 900;
-    color: #0f172a;
+    color: #0f172a !important;
     letter-spacing: 0.02em;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+  }}
+  .edm98-time,
+  .edm98-time span {{
+    color: #0f172a !important;
   }}
   .edm98-time-separator {{
     color: #475569;
