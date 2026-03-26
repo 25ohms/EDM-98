@@ -33,6 +33,7 @@ def test_demo_cli_invokes_launcher(monkeypatch) -> None:
             "--device",
             "cpu",
             "--low-memory",
+            "--offline",
             "--server-port",
             "9999",
         ],
@@ -41,6 +42,7 @@ def test_demo_cli_invokes_launcher(monkeypatch) -> None:
     assert code == 0
     assert called["device"] == "cpu"
     assert called["low_memory"] is True
+    assert called["offline"] is True
     assert called["server_port"] == 9999
 
 
@@ -59,6 +61,7 @@ def test_warm_cache_cli_invokes_helper(monkeypatch) -> None:
             "--device",
             "cuda",
             "--offline",
+            "--no-cache",
             "--hf-cache-dir",
             "/tmp/edm98-cache",
         ],
@@ -67,4 +70,5 @@ def test_warm_cache_cli_invokes_helper(monkeypatch) -> None:
     assert code == 0
     assert called["device"] == "cuda"
     assert called["offline"] is True
+    assert called["no_cache"] is True
     assert called["hf_cache_dir"] == "/tmp/edm98-cache"

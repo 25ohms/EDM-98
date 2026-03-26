@@ -41,7 +41,8 @@ uses a local cache directory at:
 
 - `.cache/huggingface/`
 
-You can prefetch those assets once with:
+Normal inference runs will populate this cache automatically on first use. You can also
+prefetch those assets once with:
 
 ```bash
 python -m edm98.cli warm-cache
@@ -50,7 +51,7 @@ python -m edm98.cli warm-cache
 After the cache is populated, local-only reuse can be enforced with:
 
 ```bash
-python -m edm98.cli warm-cache --offline
+python -m edm98.cli predict --offline path/to/song.mp3
 ```
 
 Large binary checkpoint assets in this directory should be tracked with Git LFS.

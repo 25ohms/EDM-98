@@ -34,6 +34,17 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["auto", "cpu", "cuda", "mps"],
         help="Device selection for inference.",
     )
+    predict.add_argument("--hf-cache-dir", default=None)
+    predict.add_argument(
+        "--offline",
+        action="store_true",
+        help="Use only locally cached Hugging Face-backed assets.",
+    )
+    predict.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Use an ephemeral cache directory for this run instead of a persistent one.",
+    )
 
     predict_batch = subparsers.add_parser(
         "predict-batch", help="Run inference on a directory or manifest."
@@ -73,6 +84,17 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Request a public Gradio share link.",
     )
+    demo.add_argument("--hf-cache-dir", default=None)
+    demo.add_argument(
+        "--offline",
+        action="store_true",
+        help="Use only locally cached Hugging Face-backed assets.",
+    )
+    demo.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Use an ephemeral cache directory for this run instead of a persistent one.",
+    )
 
     warm_cache = subparsers.add_parser(
         "warm-cache",
@@ -91,6 +113,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--offline",
         action="store_true",
         help="Require all Hugging Face-backed assets to already exist locally.",
+    )
+    warm_cache.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Use an ephemeral cache directory for this run instead of a persistent one.",
     )
 
     return parser
@@ -139,6 +166,10 @@ def main() -> int:
             kwargs["musicfm_model_path"] = args.musicfm_model
         kwargs["device"] = args.device
         kwargs["low_memory"] = args.low_memory
+        kwargs["offline"] = args.offline
+        kwargs["no_cache"] = args.no_cache
+        if args.hf_cache_dir:
+            kwargs["hf_cache_dir"] = args.hf_cache_dir
         prediction = predict_file(args.audio_path, **kwargs)
         if args.output:
             Path(args.output).write_text(
@@ -158,6 +189,9 @@ def main() -> int:
             musicfm_model_path=args.musicfm_model,
             device=args.device,
             low_memory=args.low_memory,
+            hf_cache_dir=args.hf_cache_dir,
+            offline=args.offline,
+            no_cache=args.no_cache,
             server_name=args.server_name,
             server_port=args.server_port,
             share=args.share,
@@ -170,6 +204,7 @@ def main() -> int:
         kwargs = {
             "device": args.device,
             "offline": args.offline,
+            "no_cache": args.no_cache,
         }
         if args.musicfm_stat:
             kwargs["musicfm_stat_path"] = args.musicfm_stat

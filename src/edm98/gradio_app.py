@@ -181,6 +181,9 @@ def build_demo(
     musicfm_model_path: str | None = None,
     device: str = "auto",
     low_memory: bool = False,
+    hf_cache_dir: str | None = None,
+    offline: bool = False,
+    no_cache: bool = False,
 ):
     try:
         import gradio as gr
@@ -199,6 +202,8 @@ def build_demo(
         kwargs = {
             "device": device,
             "low_memory": low_memory,
+            "offline": offline,
+            "no_cache": no_cache,
         }
         if checkpoint_path is not None:
             kwargs["checkpoint_path"] = checkpoint_path
@@ -208,6 +213,8 @@ def build_demo(
             kwargs["musicfm_stat_path"] = musicfm_stat_path
         if musicfm_model_path is not None:
             kwargs["musicfm_model_path"] = musicfm_model_path
+        if hf_cache_dir is not None:
+            kwargs["hf_cache_dir"] = hf_cache_dir
 
         prediction = predict_file(audio_path, **kwargs)
         return (
@@ -261,6 +268,9 @@ def launch_demo(
     musicfm_model_path: str | None = None,
     device: str = "auto",
     low_memory: bool = False,
+    hf_cache_dir: str | None = None,
+    offline: bool = False,
+    no_cache: bool = False,
     server_name: str = "0.0.0.0",
     server_port: int = 7860,
     share: bool = False,
@@ -272,6 +282,9 @@ def launch_demo(
         musicfm_model_path=musicfm_model_path,
         device=device,
         low_memory=low_memory,
+        hf_cache_dir=hf_cache_dir,
+        offline=offline,
+        no_cache=no_cache,
     )
     return demo.launch(server_name=server_name, server_port=server_port, share=share)
 

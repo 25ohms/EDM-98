@@ -101,17 +101,30 @@ Hugging Face-backed model assets are cached locally by default under:
 
 - `.cache/huggingface/`
 
-To prefetch those assets once and then reuse them locally:
+Normal `predict` and `demo` runs will populate that cache automatically on first use and reuse it on later runs.
+
+To prefetch those assets once ahead of time:
 
 ```bash
 python -m edm98.cli warm-cache
 ```
 
-After the cache is populated, you can force local-only resolution with:
+To require local-only reuse after the cache is populated:
 
 ```bash
-python -m edm98.cli warm-cache --offline
 python -m edm98.cli predict --device cuda --low-memory path/to/song.mp3
+```
+
+with:
+
+```bash
+python -m edm98.cli predict --device cuda --low-memory --offline path/to/song.mp3
+```
+
+To avoid persistent cache reuse for a single run:
+
+```bash
+python -m edm98.cli predict --device cuda --low-memory --no-cache path/to/song.mp3
 ```
 
 ### Local validation

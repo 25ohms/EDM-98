@@ -6,6 +6,7 @@ import math
 import os
 import sys
 import gc
+import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -138,8 +139,12 @@ def _resolve_device(requested: str | None) -> torch.device:
 def _configure_hf_cache(
     cache_dir: str | Path = DEFAULT_HF_CACHE_DIR,
     offline: bool = False,
+    no_cache: bool = False,
 ) -> Path:
-    cache_path = Path(cache_dir)
+    if no_cache:
+        cache_path = Path(tempfile.mkdtemp(prefix="edm98-hf-cache-"))
+    else:
+        cache_path = Path(cache_dir)
     cache_path.mkdir(parents=True, exist_ok=True)
     hub_path = cache_path / "hub"
     hub_path.mkdir(parents=True, exist_ok=True)
@@ -156,6 +161,8 @@ def _configure_hf_cache(
         os.environ.pop("TRANSFORMERS_OFFLINE", None)
 
     LOGGER.info("Using Hugging Face cache directory: %s", cache_path)
+    if no_cache:
+        LOGGER.info("Ephemeral no-cache mode enabled for Hugging Face-backed assets")
     if offline:
         LOGGER.info("Hugging Face local-only mode enabled")
     return cache_path
@@ -236,11 +243,17 @@ class InferencePipeline:
         low_memory: bool = False,
         hf_cache_dir: str | Path = DEFAULT_HF_CACHE_DIR,
         offline: bool = False,
+        no_cache: bool = False,
     ):
         self.device = _resolve_device(device)
         LOGGER.info("Using device: %s", self.device)
-        self.hf_cache_dir = _configure_hf_cache(hf_cache_dir, offline=offline)
+        self.hf_cache_dir = _configure_hf_cache(
+            hf_cache_dir,
+            offline=offline,
+            no_cache=no_cache,
+        )
         self.offline = offline
+        self.no_cache = no_cache
         self.config = load_config(config_path)
         self.dataset_label = dataset_label
         self.apply_rule_postprocessing = apply_rule_postprocessing
@@ -497,9 +510,14 @@ def warm_model_cache(
     device: str | None = "cpu",
     hf_cache_dir: str | Path = DEFAULT_HF_CACHE_DIR,
     offline: bool = False,
+    no_cache: bool = False,
 ):
     resolved_device = _resolve_device(device)
-    cache_path = _configure_hf_cache(hf_cache_dir, offline=offline)
+    cache_path = _configure_hf_cache(
+        hf_cache_dir,
+        offline=offline,
+        no_cache=no_cache,
+    )
     LOGGER.info("Warming inference model cache on device: %s", resolved_device)
 
     MuQ = _load_muq()
